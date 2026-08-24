@@ -26,7 +26,11 @@ server.listen(PORT, () => {
 // 优雅退出
 process.on('SIGINT', () => { console.log('\n正在退出...'); process.exit(0); });
 process.on('SIGTERM', () => { process.exit(0); });
+
+// 未处理异常/拒绝：只记录日志，绝不导致进程崩溃退出（避免页面 Failed to fetch）
 process.on('uncaughtException', (err) => {
-  console.error('[server] 未捕获异常:', err.message);
-  // 生产环境仅记录，不因单个异常退出（由 PM2 守护策略兜底）
+  console.error('[server] 未捕获异常:', err && err.stack || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] 未处理的 Promise 拒绝:', reason && reason.stack || reason);
 });

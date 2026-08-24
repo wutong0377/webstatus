@@ -252,9 +252,9 @@ router.post('/api/setup-admin', async (req, res) => {
   if (password.length < 6 || password.length > 72) {
     return res.status(400).json({ code: 400, message: '密码长度需为 6-72 位' });
   }
-  const hash = await bcrypt.hash(password, 10);
   let conn;
   try {
+    const hash = await bcrypt.hash(password, 10);
     conn = await connectForInstall(req.body);
     // 幂等：覆盖旧管理员（模式 B 恢复后同样有效）
     await conn.query('DELETE FROM admin');
