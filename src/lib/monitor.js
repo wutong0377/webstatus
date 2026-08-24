@@ -17,7 +17,8 @@ const { judgeStatus, STATUS } = require('./status');
 const settingsSvc = require('./settings');
 const mailer = require('./mailer');
 const alert = require('./alert');
-const { checkDns, checkCert, saveCertCheck } = require('./checks');
+const { checkDns, checkCert, saveCertCheck, checkOcsp } = require('./checks');
+const { checkDomainExpiry } = require('./whois');
 const { formatDateTime } = require('../utils/time');
 
 const CONCURRENCY = 3;        // 最大并发探测数
@@ -161,6 +162,38 @@ async function runEnhanceChecks(site) {
           '<br>签发机构：' + cert.issuer + '<br>有效期至：' + (cert.validTo || '-') + '<br>剩余：' + cert.daysLeft + ' 天'
       });
     }
+    // OCSP 证书吊销检测（独立开关）
+    if (Number(site.check_ocsp) === 1) {
+      const ocspRes = await checkOcsp(cert._rawCert, cert._rawIssuer);
+      if (ocspRes.status === 3) {
+        await alert.sendAlert({
+          site,
+          alertType: 'cert_revoke',
+          level: 3,
+          title: '【证书吊销】' + site.name,
+          content: '站点 <strong>' + site.name + '</strong>（' + site.domain + '）<br>SSL 证书已被吊销：' + ocspRes.errorMsg
+        });
+      }
+    }
+  }
+
+  // 域名注册到期检测
+  if (Number(site.check_domain) === 1) {
+    let host = site.domain;
+    try { host = new URL(site.domain).hostname; } catch (e) { /* keep */ }
+    const dom = await checkDomainExpiry(host);
+    await saveDomainCheck(site, host, dom);
+    const warnDays = Number(site.domain_warn_days) || 90;
+    if (dom.status !== 1 && (dom.status === 3 || dom.daysLeft <= warnDays)) {
+      await alert.sendAlert({
+        site,
+        alertType: 'domain',
+        level: dom.status === 3 ? 3 : 2,
+        title: '【域名到期】' + site.name + ' ' + (dom.errorMsg || ('剩余 ' + dom.daysLeft + ' 天')),
+        content: '站点 <strong>' + site.name + '</strong>（' + site.domain + '）<br>域名 ' + host + '：' +
+          (dom.errorMsg || ('将于 ' + dom.expiryDate + ' 到期，剩余 ' + dom.daysLeft + ' 天'))
+      });
+    }
   }
 
   // DNS 记录监控
@@ -194,6 +227,14 @@ async function runEnhanceChecks(site) {
       });
     }
   }
+}
+
+/** 写入域名到期检测记录 */
+async function saveDomainCheck(site, host, dom) {
+  await query(
+    'INSERT INTO domain_checks (site_id, domain, status, expiry_date, days_left, registrar, error_code, checked_at) VALUES (?,?,?,?,?,?,?,?)',
+    [site.id, String(host || '').slice(0, 255), dom.status, dom.expiryDate, dom.daysLeft, String(dom.registrar || '').slice(0, 200), dom.errorCode || '', formatDateTime()]
+  );
 }
 
 /** 抖动抑制 + 故障记录 + 告警逻辑 */

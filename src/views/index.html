@@ -18,13 +18,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         </span>
         <span class="font-semibold whitespace-nowrap">WebStatus</span>
-        <span class="text-xs text-slate-400 hidden sm:inline truncate">网站状态监控</span>
+        <span class="text-xs text-slate-400 hidden sm:inline truncate" data-i18n="app.subtitle">网站状态监控</span>
       </div>
       <div class="flex items-center gap-1.5">
         <div class="bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 flex">
-          <button id="view-card" class="px-2.5 py-1.5 rounded-md text-xs font-medium">卡片</button>
-          <button id="view-list" class="px-2.5 py-1.5 rounded-md text-xs font-medium">列表</button>
+          <button id="view-card" class="px-2.5 py-1.5 rounded-md text-xs font-medium" data-i18n="home.cardView">卡片</button>
+          <button id="view-list" class="px-2.5 py-1.5 rounded-md text-xs font-medium" data-i18n="home.listView">列表</button>
         </div>
+        <span id="lang-btn" class="inline-flex"></span>
         <button id="theme-btn" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"></button>
       </div>
     </div>
@@ -48,19 +49,20 @@
       <div class="text-slate-300 dark:text-slate-700 mb-3">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-14 h-14 mx-auto"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
       </div>
-      <p class="text-slate-400">暂无监控站点</p>
+      <p class="text-slate-400" data-i18n="home.empty">暂无监控站点</p>
     </div>
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-center text-xs text-slate-400">
-    Powered by WebStatus · 开源自托管网站状态监控系统
+    Powered by WebStatus · <span data-i18n="home.footer">开源自托管网站状态监控系统</span>
+    <div id="ws-copyright" class="mt-2"></div>
   </footer>
 
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
     const $ = s => document.querySelector(s);
-    const { api, esc, h, icon, toast, STATUS_META, fmtDelay } = WebStatus;
+    const { api, esc, h, icon, toast, STATUS_META, fmtDelay, t, tStatus, skeleton } = WebStatus;
 
     let sites = [];
     let miniData = {};
@@ -82,6 +84,9 @@
     $('#view-card').addEventListener('click', () => { view = 'card'; localStorage.setItem('ws_view', 'card'); applyView(); });
     $('#view-list').addEventListener('click', () => { view = 'list'; localStorage.setItem('ws_view', 'list'); applyView(); });
 
+    /* ---------- 语言切换按钮 ---------- */
+    $('#lang-btn').appendChild(WebStatus.langBtn());
+
     /* ---------- 主题 ---------- */
     const themeBtn = $('#theme-btn');
     themeBtn.innerHTML = icon('moon', 'w-5 h-5');
@@ -89,6 +94,17 @@
       WebStatus.toggleTheme();
       themeBtn.innerHTML = icon(WebStatus.isDark ? 'sun' : 'moon', 'w-5 h-5');
     });
+
+    /* ---------- 骨架占位 ---------- */
+    function showSkeleton() {
+      const row = $('#stat-row');
+      row.innerHTML = '';
+      for (let i = 0; i < 4; i++) row.appendChild(skeleton('h-16'));
+      const grid = $('#site-grid');
+      grid.innerHTML = '';
+      grid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
+      for (let i = 0; i < 6; i++) grid.appendChild(skeleton('h-40'));
+    }
 
     /* ---------- 公告 ---------- */
     function renderNotices(notices) {
@@ -113,30 +129,32 @@
     function renderStats() {
       const counts = { up: 0, slow: 0, down: 0, maintenance: 0 };
       sites.forEach(s => {
-        if (s.status === 1) counts.up++;
-        else if (s.status === 2) counts.slow++;
-        else if (s.status === 3) counts.down++;
-        else if (s.status === 4) counts.maintenance++;
+        if (s && s.status === 1) counts.up++;
+        else if (s && s.status === 2) counts.slow++;
+        else if (s && s.status === 3) counts.down++;
+        else if (s && s.status === 4) counts.maintenance++;
       });
       const items = [
-        { label: '正常', val: counts.up, cls: 'text-emerald-600 dark:text-emerald-400' },
-        { label: '卡顿', val: counts.slow, cls: 'text-amber-600 dark:text-amber-400' },
-        { label: '离线', val: counts.down, cls: 'text-red-600 dark:text-red-400' },
-        { label: '维修', val: counts.maintenance, cls: 'text-blue-600 dark:text-blue-400' }
+        { label: t('status.up'), val: counts.up, cls: 'text-emerald-600 dark:text-emerald-400' },
+        { label: t('status.slow'), val: counts.slow, cls: 'text-amber-600 dark:text-amber-400' },
+        { label: t('status.down'), val: counts.down, cls: 'text-red-600 dark:text-red-400' },
+        { label: t('status.maintenance'), val: counts.maintenance, cls: 'text-blue-600 dark:text-blue-400' }
       ];
       const row = $('#stat-row');
       row.innerHTML = '';
       items.forEach(it => {
         row.appendChild(h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between',
-          '<span class="text-sm text-slate-500">' + it.label + '</span><span class="text-2xl font-semibold tabular ' + it.cls + '">' + it.val + '</span>'));
+          '<span class="text-sm text-slate-500">' + esc(it.label) + '</span><span class="text-2xl font-semibold tabular ' + it.cls + '">' + it.val + '</span>'));
       });
     }
 
-    /* ---------- 卡片 ---------- */
+    /* ---------- 卡片（每个字段都做空值兜底，单点异常不拖垮整页） ---------- */
     function card(s) {
+      if (!s) return null;
       const meta = STATUS_META[s.status] || STATUS_META[0];
-      const el = h('a', 'card-hover bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 block');
-      el.href = '/site/' + s.id;
+      const el = h('a', 'card-hover bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 block h-full flex flex-col');
+      el.href = '/site/' + (s.id || '');
+      const showErr = s.status === 3;
 
       const head = h('div', 'flex items-start justify-between gap-2');
       const titleWrap = h('div', 'flex items-center gap-3 min-w-0');
@@ -144,7 +162,7 @@
         const img = h('img', 'w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 object-contain p-1 flex-shrink-0');
         img.src = s.icon_url;
         img.referrerPolicy = 'no-referrer';
-        img.onerror = () => { img.replaceWith(iconWrap()); };
+        img.onerror = () => { if (img.parentNode) img.replaceWith(iconWrap()); };
         titleWrap.appendChild(img);
       } else {
         titleWrap.appendChild(iconWrap());
@@ -154,37 +172,37 @@
       nameWrap.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(s.domain)));
       titleWrap.appendChild(nameWrap);
       head.appendChild(titleWrap);
-      head.appendChild(h('span', 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset ' + meta.badge,
-        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + meta.text + '</span>'));
+      head.appendChild(h('span', 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset ' + meta.badge + ' flex-shrink-0',
+        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + esc(tStatus(s.status)) + '</span>'));
       el.appendChild(head);
 
       if (s.description) {
         el.appendChild(h('p', 'mt-2 text-sm text-slate-500 dark:text-slate-400', esc(s.description)));
       }
       if (s.maintenance === 1 && s.maintenance_note) {
-        el.appendChild(h('div', 'mt-2 text-xs text-blue-600 dark:text-blue-400', '维修说明：' + esc(s.maintenance_note)));
+        el.appendChild(h('div', 'mt-2 text-xs text-blue-600 dark:text-blue-400', esc(t('home.maintenance')) + esc(s.maintenance_note)));
       }
 
-      const metrics = h('div', 'mt-3 grid grid-cols-3 gap-2 text-center');
+      const metrics = h('div', 'mt-auto grid grid-cols-3 gap-2 text-center pt-3');
       metrics.innerHTML =
-        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">延迟</div><div class="text-sm font-medium tabular">' + fmtDelay(s.last_delay) + '</div></div>' +
-        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">状态码</div><div class="text-sm font-medium tabular">' + (s.last_http_code ? esc(s.last_http_code) : '-') + '</div></div>' +
-        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">最近检测</div><div class="text-sm font-medium tabular text-xs">' + (s.last_checked_at ? esc(s.last_checked_at.slice(5, 16)) : '-') + '</div></div>';
+        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">' + esc(t('home.metric.delay')) + '</div><div class="text-sm font-medium tabular">' + fmtDelay(s.last_delay) + '</div></div>' +
+        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">' + esc(t('home.metric.code')) + '</div><div class="text-sm font-medium tabular">' + (s.last_http_code ? esc(s.last_http_code) : '-') + '</div></div>' +
+        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">' + esc(t('home.metric.checked')) + '</div><div class="text-sm font-medium tabular text-xs">' + (s.last_checked_at ? esc(String(s.last_checked_at).slice(5, 16)) : '-') + '</div></div>';
       el.appendChild(metrics);
 
-      const mini = miniData[s.id] || [];
+      const mini = (miniData && miniData[s.id]) || [];
       if (mini.length) {
         const tl = h('div', 'mt-3 flex items-center gap-1');
         mini.forEach(p => {
-          const m = STATUS_META[p.status] || STATUS_META[0];
+          const m = (p && STATUS_META[p.status]) || STATUS_META[0];
           tl.appendChild(h('div', 'h-1.5 flex-1 rounded-full ' + m.dot));
         });
         el.appendChild(tl);
       }
 
-      if (s.status === 3 && s.last_error_code) {
+      if (showErr && s.last_error_code) {
         el.appendChild(h('div', 'mt-3 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg p-2.5',
-          '<strong>' + esc(s.last_error_code) + '</strong> · ' + esc(s.last_error_msg || '探测异常')));
+          '<strong>' + esc(s.last_error_code) + '</strong> · ' + esc(s.last_error_msg || t('home.probeError'))));
       }
       return el;
     }
@@ -195,18 +213,26 @@
 
     /* ---------- 列表行 ---------- */
     function row(s) {
+      if (!s) return null;
       const meta = STATUS_META[s.status] || STATUS_META[0];
       const el = h('a', 'card-hover bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex items-center gap-3 block');
-      el.href = '/site/' + s.id;
+      el.href = '/site/' + (s.id || '');
       el.appendChild(h('span', 'w-2.5 h-2.5 rounded-full flex-shrink-0 ' + meta.dot));
       const nameWrap = h('div', 'min-w-0 flex-1');
       nameWrap.appendChild(h('div', 'font-medium truncate', esc(s.name)));
       nameWrap.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(s.domain)));
       el.appendChild(nameWrap);
-      el.appendChild(h('div', 'hidden sm:block text-sm tabular text-slate-500', '延迟 ' + fmtDelay(s.last_delay)));
+      el.appendChild(h('div', 'hidden sm:block text-sm tabular text-slate-500', esc(t('home.metric.delay')) + ' ' + fmtDelay(s.last_delay)));
       el.appendChild(h('span', 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset flex-shrink-0 ' + meta.badge,
-        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + meta.text + '</span>'));
+        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + esc(tStatus(s.status)) + '</span>'));
       return el;
+    }
+
+    /* ---------- 网格自适应：1 个单列居中，2-3 个双列，多则三列 ---------- */
+    function gridClasses(n) {
+      if (n <= 1) return 'grid grid-cols-1 max-w-2xl mx-auto gap-4';
+      if (n <= 3) return 'grid grid-cols-1 sm:grid-cols-2 gap-4';
+      return 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
     }
 
     /* ---------- 渲染 ---------- */
@@ -223,9 +249,10 @@
         return;
       }
       empty.classList.add('hidden');
+      grid.className = gridClasses(sites.length);
       applyView();
-      if (view === 'card') sites.forEach(s => grid.appendChild(card(s)));
-      else sites.forEach(s => list.appendChild(row(s)));
+      if (view === 'card') sites.forEach(s => { try { const c = card(s); if (c) grid.appendChild(c); } catch (e) { /* 单卡异常不中断 */ } });
+      else sites.forEach(s => { try { const r = row(s); if (r) list.appendChild(r); } catch (e) { /* 单行异常不中断 */ } });
     }
 
     /* ---------- 拉取数据 ---------- */
@@ -233,13 +260,13 @@
       try {
         const r = await api('/api/public/status');
         refreshSec = r.refresh || 30;
-        sites = r.data || [];
+        sites = (r.data || []).filter(Boolean);
         const ids = sites.map(s => s.id).join(',');
         if (ids) {
           const m = await api('/api/public/mini-timeline?id=' + ids).catch(() => ({ data: {} }));
           miniData = m.data || {};
         } else { miniData = {}; }
-        renderStats();
+        try { renderStats(); } catch (e) { /* 统计异常不中断 */ }
         renderSites();
       } catch (e) {
         // 未安装状态，服务端会重定向；静默即可
@@ -253,14 +280,23 @@
       } catch (e) { /* ignore */ }
     }
 
+    // 切换语言时重渲染统计与站点（使用已缓存数据，无需重新请求）
+    document.addEventListener('ws-langchange', () => {
+      if (sites.length) { try { renderStats(); } catch (e) {} renderSites(); }
+    });
+
     // 防抖轮询：页面不可见时不请求
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') load();
     });
 
+    showSkeleton();
     load();
     loadNotices();
     setInterval(() => { if (document.visibilityState !== 'hidden') { load(); loadNotices(); } }, Math.max(5, refreshSec) * 1000);
+
+    // 版权渲染（校验失败会停止页面渲染）
+    WebStatus.renderCopyright();
   })();
   </script>
 </body>

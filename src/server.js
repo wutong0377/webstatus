@@ -6,6 +6,14 @@
  */
 const http = require('http');
 const { config } = require('./config');
+const { verifyCopyright } = require('./lib/copyright');
+
+// 版权完整性校验：版权信息被改动则停止运行
+if (!verifyCopyright()) {
+  console.error('[copyright] 版权完整性校验失败，服务已停止');
+  process.exit(1);
+}
+
 const app = require('./app');
 
 const PORT = Number(config.app.port) || 3000;

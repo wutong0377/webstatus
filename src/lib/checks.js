@@ -11,6 +11,10 @@ const https = require('https');
 const { query } = require('../db');
 const { formatDateTime } = require('../utils/time');
 
+// OCSP 吊销检测依赖 ocsp 库（可选）；未安装时自动降级为"无法校验"，不崩溃
+let ocspLib = null;
+try { ocspLib = require('ocsp'); } catch (e) { ocspLib = null; }
+
 const UA = 'WebStatus-Monitor/1.0';
 
 /**
@@ -64,7 +68,7 @@ async function checkCert(site, timeoutMs = 8000) {
     port = 443;
   }
   const warnDays = Number(site.cert_warn_days) || 30;
-  const out = { status: 1, issuer: '', subject: '', san: [], validFrom: null, validTo: null, daysLeft: 0, errorCode: '', errorMsg: '' };
+  const out = { status: 1, issuer: '', subject: '', san: [], validFrom: null, validTo: null, daysLeft: 0, errorCode: '', errorMsg: '', _rawCert: null, _rawIssuer: null };
 
   return await new Promise((resolve) => {
     const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: false }, () => {
@@ -73,6 +77,9 @@ async function checkCert(site, timeoutMs = 8000) {
         const validTo = cert.valid_to ? new Date(cert.valid_to) : null;
         const validFrom = cert.valid_from ? new Date(cert.valid_from) : null;
         const daysLeft = validTo ? Math.floor((validTo.getTime() - Date.now()) / 86400000) : 0;
+        // 保留原始证书（DER）供 OCSP 吊销检测使用（仅内部使用，不入库不外传）
+        out._rawCert = cert.raw || null;
+        out._rawIssuer = (cert.issuerCertificate && cert.issuerCertificate.raw) ? cert.issuerCertificate.raw : null;
         out.issuer = (cert.issuer && cert.issuer.CN) || '';
         out.subject = (cert.subject && cert.subject.CN) || '';
         out.san = String(cert.subjectaltname || '').split(/,\s?/).filter(Boolean);
@@ -137,4 +144,42 @@ function checkSecurityHeaders(url, timeoutMs = 10000) {
   });
 }
 
-module.exports = { checkDns, checkCert, saveCertCheck, getLatestCert, checkSecurityHeaders, parseExpected };
+/**
+ * OCSP 证书吊销检测
+ * 需要 ocsp 依赖与完整证书链（签发者证书）；任一缺失时返回 status=2（无法校验，不误报）。
+ * @param {Buffer|null} rawCert 证书 DER
+ * @param {Buffer|null} rawIssuer 签发者证书 DER
+ * @returns Promise<{status(1未吊销|2无法校验|3已吊销), revoked, errorCode, errorMsg}>
+ */
+function checkOcsp(rawCert, rawIssuer) {
+  return new Promise((resolve) => {
+    const out = { status: 1, revoked: false, errorCode: '', errorMsg: '' };
+    if (!ocspLib) {
+      out.status = 2; out.errorCode = 'OCSP_DISABLED'; out.errorMsg = 'ocsp 依赖未安装，已跳过吊销检测';
+      return resolve(out);
+    }
+    if (!rawCert || !rawIssuer) {
+      out.status = 2; out.errorCode = 'OCSP_NO_ISSUER'; out.errorMsg = '缺少签发者证书，无法进行吊销检测';
+      return resolve(out);
+    }
+    try {
+      ocspLib.verify({ cert: rawCert, issuer: rawIssuer }, (err, res) => {
+        if (err) {
+          out.status = 2; out.errorCode = 'OCSP_ERROR'; out.errorMsg = (err && err.message) || 'OCSP 校验失败';
+          return resolve(out);
+        }
+        if (res && res.revoked) {
+          out.status = 3; out.revoked = true; out.errorCode = 'CERT_REVOKED'; out.errorMsg = '证书已被吊销';
+          return resolve(out);
+        }
+        out.status = 1; out.revoked = false;
+        resolve(out);
+      });
+    } catch (e) {
+      out.status = 2; out.errorCode = 'OCSP_EXCEPTION'; out.errorMsg = (e && e.message) || 'OCSP 校验异常';
+      resolve(out);
+    }
+  });
+}
+
+module.exports = { checkDns, checkCert, saveCertCheck, getLatestCert, checkSecurityHeaders, checkOcsp, parseExpected };

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>告警设置 - WebStatus 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div id="admin-shell"></div>
+
+  <!-- Webhook 编辑弹窗 -->
+  <div id="webhook-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" data-wclose></div>
+    <div class="absolute inset-y-0 right-0 w-full max-w-md bg-white dark:bg-slate-900 shadow-xl overflow-y-auto">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 id="webhook-title" class="text-lg font-bold">新增 Webhook</h2>
+          <button data-wclose class="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <form id="webhook-form" class="space-y-4">
+          <input type="hidden" id="wh-id">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">名称 *</label>
+            <input id="wh-name" class="inp" maxlength="100">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">回调 URL *</label>
+            <input id="wh-url" class="inp" placeholder="https://example.com/hook" maxlength="500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">签名密钥（留空则不修改）</label>
+            <input id="wh-secret" class="inp" maxlength="200">
+          </div>
+          <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+            <input type="checkbox" id="wh-enabled" class="w-4 h-4 accent-blue-600" checked>
+            启用
+          </label>
+          <div id="wh-err" class="hidden text-sm text-red-600 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2"></div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" data-wclose class="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium">取消</button>
+            <button type="submit" class="px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 维护窗口编辑弹窗 -->
+  <div id="win-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" data-mclose></div>
+    <div class="absolute inset-y-0 right-0 w-full max-w-md bg-white dark:bg-slate-900 shadow-xl overflow-y-auto">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 id="win-title" class="text-lg font-bold">新增维护窗口</h2>
+          <button data-mclose class="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <form id="win-form" class="space-y-4">
+          <input type="hidden" id="mw-id">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">站点 *</label>
+            <select id="mw-site" class="inp"><option value="">请选择</option></select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">标题 *</label>
+            <input id="mw-title" class="inp" maxlength="100">
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">开始时间 *</label>
+              <input id="mw-start" type="datetime-local" class="inp">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">结束时间 *</label>
+              <input id="mw-end" type="datetime-local" class="inp">
+            </div>
+          </div>
+          <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+            <input type="checkbox" id="mw-enabled" class="w-4 h-4 accent-blue-600" checked>
+            启用
+          </label>
+          <div id="mw-err" class="hidden text-sm text-red-600 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2"></div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" data-mclose class="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium">取消</button>
+            <button type="submit" class="px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/js/common.js"></script>
+  <script>
+  (() => {
+    const { api, esc, h, icon, toast } = WebStatus;
+    const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
+    document.querySelectorAll('.inp').forEach(e => e.className = e.className.replace('inp', '') + ' ' + inp);
+
+    let sites = [];
+    let logPage = 1;
+    let logTotal = 0;
+
+    const LEVEL_META = {
+      1: '警告',
+      2: '严重',
+      3: '紧急'
+    };
+    const LEVEL_CLS = {
+      1: 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400',
+      2: 'bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400',
+      3: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400'
+    };
+
+    (async () => {
+      const main = await WebStatus.renderAdminShell('/admin/alerts');
+      const page = h('div', 'px-4 sm:px-6 py-6 max-w-6xl mx-auto');
+      main.appendChild(page);
+      page.appendChild(h('h1', 'text-xl font-bold mb-5', '告警设置'));
+
+      /* ---------- Tab 切换 ---------- */
+      const tabs = [
+        { key: 'logs', label: '告警日志' },
+        { key: 'webhooks', label: 'Webhook 管理' },
+        { key: 'windows', label: '维护窗口' },
+        { key: 'onebot', label: 'OneBot QQ' }
+      ];
+      const tabBar = h('div', 'flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 mb-5');
+      page.appendChild(tabBar);
+      const panels = {};
+      const tabBtns = {};
+
+      tabs.forEach(t => {
+        const btn = h('button', 'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors', t.label);
+        btn.addEventListener('click', () => switchTab(t.key));
+        tabBar.appendChild(btn);
+        tabBtns[t.key] = btn;
+        const panel = h('div', 'hidden');
+        panel.id = 'panel-' + t.key;
+        page.appendChild(panel);
+        panels[t.key] = panel;
+      });
+
+      function switchTab(key) {
+        Object.keys(tabBtns).forEach(k => {
+          const active = k === key;
+          tabBtns[k].className = 'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ' +
+            (active ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300');
+          panels[k].classList.toggle('hidden', !active);
+        });
+        if (key === 'logs') loadLogs(1);
+        if (key === 'webhooks') loadWebhooks();
+        if (key === 'windows') loadWindows();
+        if (key === 'onebot') loadOnebot();
+      }
+
+      async function loadSites() {
+        try {
+          const r = await api('/api/admin/settings/site-options');
+          sites = r.data || [];
+          const opts = sites.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
+          const logSite = document.getElementById('log-site');
+          if (logSite) logSite.innerHTML = '<option value="">全部站点</option>' + opts;
+          const mwSite = document.getElementById('mw-site');
+          if (mwSite) mwSite.innerHTML = '<option value="">请选择</option>' + opts;
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      /* ================= 告警日志 ================= */
+      const logPanel = panels.logs;
+      const filterRow = h('div', 'flex items-center gap-2 flex-wrap mb-4');
+      const logSite = h('select', 'w-48 ' + inp);
+      logSite.id = 'log-site';
+      logSite.innerHTML = '<option value="">全部站点</option>';
+      const logType = h('select', 'w-36 ' + inp);
+      logType.id = 'log-type';
+      logType.innerHTML = '<option value="all">全部类型</option><option value="down">down</option><option value="recover">recover</option><option value="cert">cert</option><option value="dns">dns</option><option value="tcp">tcp</option><option value="webhook">webhook</option>';
+      const logLevel = h('select', 'w-32 ' + inp);
+      logLevel.id = 'log-level';
+      logLevel.innerHTML = '<option value="all">全部级别</option><option value="1">警告</option><option value="2">严重</option><option value="3">紧急</option>';
+      const searchBtn = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '查询');
+      filterRow.appendChild(logSite);
+      filterRow.appendChild(logType);
+      filterRow.appendChild(logLevel);
+      filterRow.appendChild(searchBtn);
+      logPanel.appendChild(filterRow);
+
+      const logBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden');
+      logPanel.appendChild(logBox);
+      const logTableWrap = h('div', 'overflow-x-auto');
+      logBox.appendChild(logTableWrap);
+      const logTable = h('table', 'w-full text-sm');
+      logTable.innerHTML = '<thead><tr class="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-slate-800">' +
+        '<th class="px-4 py-3 font-medium">时间</th><th class="px-4 py-3 font-medium">站点</th><th class="px-4 py-3 font-medium">类型</th>' +
+        '<th class="px-4 py-3 font-medium">级别</th><th class="px-4 py-3 font-medium">通道</th><th class="px-4 py-3 font-medium">目标</th>' +
+        '<th class="px-4 py-3 font-medium">状态</th><th class="px-4 py-3 font-medium">错误</th></tr></thead>';
+      const logBody = h('tbody', '');
+      logTable.appendChild(logBody);
+      logTableWrap.appendChild(logTable);
+      const logPager = h('div', 'flex items-center justify-between px-4 py-3 text-sm');
+      logPager.id = 'log-pager';
+      logBox.appendChild(logPager);
+
+      async function loadLogs(page) {
+        const params = new URLSearchParams({
+          page: page || 1,
+          size: 15,
+          site_id: logSite.value || '',
+          type: logType.value || 'all',
+          level: logLevel.value || 'all'
+        });
+        try {
+          const r = await api('/api/admin/alerts/logs?' + params.toString());
+          logPage = r.page || 1;
+          logTotal = r.total || 0;
+          logBody.innerHTML = '';
+          if (!r.data || !r.data.length) {
+            logBody.appendChild(h('tr', '', '<td colspan="8" class="px-4 py-10 text-center text-slate-400">暂无告警日志</td>'));
+          }
+          (r.data || []).forEach(row => {
+            const tr = h('tr', 'border-b border-slate-100 dark:border-slate-800 last:border-0');
+            const cell = c => 'px-4 py-2.5 ' + c;
+            tr.appendChild(h('td', cell('text-xs text-slate-500'), esc(row.created_at)));
+            tr.appendChild(h('td', cell('text-xs text-slate-600 dark:text-slate-300'), esc(row.site_name || ('#' + row.site_id))));
+            tr.appendChild(h('td', cell('text-xs'), '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-500/20 dark:bg-slate-700/40 dark:text-slate-300">' + esc(row.alert_type) + '</span>'));
+            tr.appendChild(h('td', cell(''), '<span class="px-2 py-0.5 rounded-full text-xs ring-1 ring-inset ' + (LEVEL_CLS[row.level] || LEVEL_CLS[2]) + '">' + (LEVEL_META[row.level] || row.level) + '</span>'));
+            tr.appendChild(h('td', cell('text-xs text-slate-500'), esc(row.channel || '-')));
+            tr.appendChild(h('td', cell('text-xs text-slate-500 max-w-[160px] truncate'), esc(row.target || '-')));
+            tr.appendChild(h('td', cell(''),
+              Number(row.status) === 1
+                ? '<span class="text-xs text-emerald-600 dark:text-emerald-400">成功</span>'
+                : '<span class="text-xs text-red-600 dark:text-red-400">失败</span>'));
+            tr.appendChild(h('td', cell('text-xs text-slate-400 max-w-[200px] truncate'), esc(row.error_msg || '')));
+            logBody.appendChild(tr);
+          });
+          renderLogPager();
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      function renderLogPager() {
+        const totalPages = Math.max(1, Math.ceil(logTotal / 15));
+        logPager.innerHTML = '';
+        logPager.appendChild(h('span', 'text-xs text-slate-400', '共 ' + logTotal + ' 条 · 第 ' + logPage + '/' + totalPages + ' 页'));
+        const btns = h('div', 'flex items-center gap-2');
+        const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs ' + (logPage <= 1 ? 'opacity-40 cursor-not-allowed' : ''), '上一页');
+        if (logPage > 1) prev.addEventListener('click', () => loadLogs(logPage - 1));
+        btns.appendChild(prev);
+        const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs ' + (logPage >= totalPages ? 'opacity-40 cursor-not-allowed' : ''), '下一页');
+        if (logPage < totalPages) next.addEventListener('click', () => loadLogs(logPage + 1));
+        btns.appendChild(next);
+        logPager.appendChild(btns);
+      }
+
+      searchBtn.addEventListener('click', () => loadLogs(1));
+
+      /* ================= Webhook 管理 ================= */
+      const whPanel = panels.webhooks;
+      const whHeader = h('div', 'flex items-center justify-between mb-4');
+      whHeader.appendChild(h('div', 'text-sm font-semibold', 'Webhook 回调配置'));
+      const whAdd = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '新增 Webhook');
+      whHeader.appendChild(whAdd);
+      whPanel.appendChild(whHeader);
+
+      const whBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden');
+      whPanel.appendChild(whBox);
+      const whList = h('div', 'divide-y divide-slate-100 dark:divide-slate-800');
+      whBox.appendChild(whList);
+
+      async function loadWebhooks() {
+        try {
+          const r = await api('/api/admin/alerts/webhooks');
+          whList.innerHTML = '';
+          if (!r.data || !r.data.length) {
+            whList.appendChild(h('div', 'px-4 py-10 text-center text-slate-400 text-sm', '暂无 Webhook 配置'));
+            return;
+          }
+          r.data.forEach(w => {
+            const el = h('div', 'p-4 flex items-center gap-3 flex-wrap');
+            const body = h('div', 'flex-1 min-w-0');
+            const nameRow = h('div', 'flex items-center gap-2');
+            nameRow.appendChild(h('span', 'font-medium', esc(w.name)));
+            nameRow.appendChild(h('span', 'px-2 py-0.5 rounded-full text-xs ring-1 ring-inset ' +
+              (Number(w.enabled) === 1
+                ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400'
+                : 'bg-slate-100 text-slate-500 ring-slate-500/20 dark:bg-slate-700/40 dark:text-slate-300'), Number(w.enabled) === 1 ? '已启用' : '已停用'));
+            body.appendChild(nameRow);
+            body.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(w.url)));
+            body.appendChild(h('div', 'text-xs text-slate-400', w.secret_masked ? '签名密钥：' + esc(w.secret_masked) : '未设置签名密钥'));
+            el.appendChild(body);
+            const act = h('div', 'flex items-center gap-1.5');
+            const toggle = h('button', 'px-2.5 py-1.5 rounded-lg text-xs ' + (Number(w.enabled) === 1 ? 'text-slate-500' : 'text-emerald-600'), Number(w.enabled) === 1 ? '停用' : '启用');
+            toggle.addEventListener('click', () => toggleWebhook(w));
+            act.appendChild(toggle);
+            const edit = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800', '编辑');
+            edit.addEventListener('click', () => openWebhookEdit(w));
+            act.appendChild(edit);
+            const del = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10', '删除');
+            del.addEventListener('click', () => deleteWebhook(w));
+            act.appendChild(del);
+            el.appendChild(act);
+            whList.appendChild(el);
+          });
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      async function toggleWebhook(w) {
+        try {
+          await api('/api/admin/alerts/webhooks/' + w.id + '/update', {
+            method: 'POST',
+            body: { name: w.name, url: w.url, enabled: Number(w.enabled) !== 1, secret: '' }
+          });
+          toast(Number(w.enabled) === 1 ? '已停用' : '已启用', 'success');
+          loadWebhooks();
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      async function deleteWebhook(w) {
+        if (!confirm('确定删除 Webhook「' + w.name + '」吗？')) return;
+        try {
+          await api('/api/admin/alerts/webhooks/' + w.id + '/delete', { method: 'POST' });
+          toast('已删除', 'success');
+          loadWebhooks();
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      const whModal = document.getElementById('webhook-modal');
+      function openWhModal() { whModal.classList.remove('hidden'); document.getElementById('wh-err').classList.add('hidden'); }
+      function closeWhModal() { whModal.classList.add('hidden'); }
+      whModal.querySelectorAll('[data-wclose]').forEach(el => el.addEventListener('click', closeWhModal));
+
+      function openWebhookAdd() {
+        document.getElementById('wh-id').value = '';
+        document.getElementById('wh-name').value = '';
+        document.getElementById('wh-url').value = '';
+        document.getElementById('wh-secret').value = '';
+        document.getElementById('wh-enabled').checked = true;
+        document.getElementById('webhook-title').textContent = '新增 Webhook';
+        openWhModal();
+      }
+      function openWebhookEdit(w) {
+        document.getElementById('wh-id').value = w.id;
+        document.getElementById('wh-name').value = w.name;
+        document.getElementById('wh-url').value = w.url;
+        document.getElementById('wh-secret').value = '';
+        document.getElementById('wh-enabled').checked = Number(w.enabled) === 1;
+        document.getElementById('webhook-title').textContent = '编辑 Webhook';
+        openWhModal();
+      }
+      whAdd.addEventListener('click', openWebhookAdd);
+
+      document.getElementById('webhook-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const id = document.getElementById('wh-id').value;
+        const body = {
+          name: document.getElementById('wh-name').value.trim(),
+          url: document.getElementById('wh-url').value.trim(),
+          secret: document.getElementById('wh-secret').value,
+          enabled: document.getElementById('wh-enabled').checked
+        };
+        const err = document.getElementById('wh-err');
+        try {
+          if (id) await api('/api/admin/alerts/webhooks/' + id + '/update', { method: 'POST', body });
+          else await api('/api/admin/alerts/webhooks/create', { method: 'POST', body });
+          closeWhModal();
+          toast('保存成功', 'success');
+          loadWebhooks();
+        } catch (e) {
+          err.textContent = e.message || '保存失败';
+          err.classList.remove('hidden');
+        }
+      });
+
+      /* ================= 维护窗口 ================= */
+      const mwPanel = panels.windows;
+      const mwHeader = h('div', 'flex items-center justify-between mb-4');
+      mwHeader.appendChild(h('div', 'text-sm font-semibold', '维护计划窗口'));
+      const mwAdd = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '新增窗口');
+      mwHeader.appendChild(mwAdd);
+      mwPanel.appendChild(mwHeader);
+
+      const mwBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden');
+      mwPanel.appendChild(mwBox);
+      const mwList = h('div', 'divide-y divide-slate-100 dark:divide-slate-800');
+      mwBox.appendChild(mwList);
+
+      async function loadWindows() {
+        try {
+          const r = await api('/api/admin/alerts/windows');
+          mwList.innerHTML = '';
+          if (!r.data || !r.data.length) {
+            mwList.appendChild(h('div', 'px-4 py-10 text-center text-slate-400 text-sm', '暂无维护窗口'));
+            return;
+          }
+          r.data.forEach(w => {
+            const el = h('div', 'p-4 flex items-center gap-3 flex-wrap');
+            const body = h('div', 'flex-1 min-w-0');
+            const nameRow = h('div', 'flex items-center gap-2');
+            nameRow.appendChild(h('span', 'font-medium', esc(w.title)));
+            nameRow.appendChild(h('span', 'px-2 py-0.5 rounded-full text-xs ring-1 ring-inset ' +
+              (Number(w.enabled) === 1
+                ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400'
+                : 'bg-slate-100 text-slate-500 ring-slate-500/20 dark:bg-slate-700/40 dark:text-slate-300'), Number(w.enabled) === 1 ? '启用' : '停用'));
+            body.appendChild(nameRow);
+            body.appendChild(h('div', 'text-xs text-slate-400', esc(w.site_name || ('#' + w.site_id)) + ' · ' + esc(w.start_at) + ' ~ ' + esc(w.end_at)));
+            el.appendChild(body);
+            const act = h('div', 'flex items-center gap-1.5');
+            const edit = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800', '编辑');
+            edit.addEventListener('click', () => openWinEdit(w));
+            act.appendChild(edit);
+            const del = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10', '删除');
+            del.addEventListener('click', () => deleteWindow(w));
+            act.appendChild(del);
+            el.appendChild(act);
+            mwList.appendChild(el);
+          });
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      async function deleteWindow(w) {
+        if (!confirm('确定删除维护窗口「' + w.title + '」吗？')) return;
+        try {
+          await api('/api/admin/alerts/windows/' + w.id + '/delete', { method: 'POST' });
+          toast('已删除', 'success');
+          loadWindows();
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      const mwModal = document.getElementById('win-modal');
+      function openMwModal() { mwModal.classList.remove('hidden'); document.getElementById('mw-err').classList.add('hidden'); }
+      function closeMwModal() { mwModal.classList.add('hidden'); }
+      mwModal.querySelectorAll('[data-mclose]').forEach(el => el.addEventListener('click', closeMwModal));
+
+      function openWinAdd() {
+        document.getElementById('mw-id').value = '';
+        document.getElementById('mw-title').value = '';
+        document.getElementById('mw-start').value = '';
+        document.getElementById('mw-end').value = '';
+        document.getElementById('mw-enabled').checked = true;
+        document.getElementById('win-title').textContent = '新增维护窗口';
+        openMwModal();
+      }
+      function openWinEdit(w) {
+        document.getElementById('mw-id').value = w.id;
+        document.getElementById('mw-site').value = w.site_id;
+        document.getElementById('mw-title').value = w.title;
+        document.getElementById('mw-start').value = w.start_at ? String(w.start_at).replace(' ', 'T') : '';
+        document.getElementById('mw-end').value = w.end_at ? String(w.end_at).replace(' ', 'T') : '';
+        document.getElementById('mw-enabled').checked = Number(w.enabled) === 1;
+        document.getElementById('win-title').textContent = '编辑维护窗口';
+        openMwModal();
+      }
+      mwAdd.addEventListener('click', openWinAdd);
+
+      document.getElementById('win-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const id = document.getElementById('mw-id').value;
+        const body = {
+          site_id: Number(document.getElementById('mw-site').value) || 0,
+          title: document.getElementById('mw-title').value.trim(),
+          start_at: (document.getElementById('mw-start').value || '').replace('T', ' '),
+          end_at: (document.getElementById('mw-end').value || '').replace('T', ' '),
+          enabled: document.getElementById('mw-enabled').checked
+        };
+        const err = document.getElementById('mw-err');
+        try {
+          if (id) await api('/api/admin/alerts/windows/' + id + '/update', { method: 'POST', body });
+          else await api('/api/admin/alerts/windows/create', { method: 'POST', body });
+          closeMwModal();
+          toast('保存成功', 'success');
+          loadWindows();
+        } catch (e) {
+          err.textContent = e.message || '保存失败';
+          err.classList.remove('hidden');
+        }
+      });
+
+      /* ================= OneBot QQ ================= */
+      const obPanel = panels.onebot;
+      const obBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 max-w-lg');
+      obPanel.appendChild(obBox);
+      obBox.appendChild(h('h2', 'text-sm font-semibold mb-4', 'OneBot QQ 机器人配置（预留通道）'));
+      obBox.appendChild(h('div', 'text-xs text-slate-400 mb-4', '通过 OneBot 协议对接 QQ 群告警推送。此处仅保存配置，发送逻辑由后端实现。'));
+
+      const obForm = h('div', 'space-y-4');
+      const obEnabledWrap = h('div', '');
+      const obEnabled = h('input');
+      obEnabled.type = 'checkbox';
+      obEnabled.id = 'ob-enabled';
+      obEnabled.className = 'w-4 h-4 accent-blue-600';
+      const obEnabledLabel = h('label', 'flex items-center gap-2.5 text-sm cursor-pointer');
+      obEnabledLabel.appendChild(obEnabled);
+      obEnabledLabel.appendChild(h('span', '', '启用 OneBot 推送'));
+      obEnabledWrap.appendChild(obEnabledLabel);
+      obForm.appendChild(obEnabledWrap);
+
+      const obUrlWrap = h('div', '');
+      obUrlWrap.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', 'API 地址'));
+      const obUrl = h('input', inp);
+      obUrl.id = 'ob-api-url';
+      obUrl.placeholder = 'http://127.0.0.1:3001';
+      obUrlWrap.appendChild(obUrl);
+      obForm.appendChild(obUrlWrap);
+
+      const obTokenWrap = h('div', '');
+      obTokenWrap.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', '访问令牌（留空则不修改）'));
+      const obToken = h('input', inp);
+      obToken.id = 'ob-token';
+      obToken.type = 'password';
+      obToken.placeholder = '已保存的令牌将保留';
+      obTokenWrap.appendChild(obToken);
+      obForm.appendChild(obTokenWrap);
+
+      const obGroupWrap = h('div', '');
+      obGroupWrap.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', '目标群号'));
+      const obGroup = h('input', inp);
+      obGroup.id = 'ob-group';
+      obGroup.placeholder = '例如 123456789';
+      obGroupWrap.appendChild(obGroup);
+      obForm.appendChild(obGroupWrap);
+
+      const obErr = h('div', 'hidden text-sm text-red-600 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2');
+      obForm.appendChild(obErr);
+      const obSave = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '保存配置');
+      obForm.appendChild(obSave);
+      obBox.appendChild(obForm);
+
+      async function loadOnebot() {
+        try {
+          const r = await api('/api/admin/alerts/onebot');
+          const d = r.data || {};
+          obEnabled.checked = !!d.enabled;
+          obUrl.value = d.api_url || '';
+          obToken.value = '';
+          obToken.placeholder = d.token_masked ? '已保存（输入新值可修改）' : '未设置';
+          obGroup.value = d.group || '';
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      obSave.addEventListener('click', async () => {
+        try {
+          await api('/api/admin/alerts/onebot', {
+            method: 'POST',
+            body: {
+              enabled: obEnabled.checked,
+              api_url: obUrl.value.trim(),
+              token: obToken.value,
+              group: obGroup.value.trim()
+            }
+          });
+          toast('配置已保存', 'success');
+          loadOnebot();
+        } catch (e) {
+          obErr.textContent = e.message || '保存失败';
+          obErr.classList.remove('hidden');
+        }
+      });
+
+      /* ---------- 初始化 ---------- */
+      await loadSites();
+      switchTab('logs');
+    })();
+  })();
+  </script>
+</body>
+</html>

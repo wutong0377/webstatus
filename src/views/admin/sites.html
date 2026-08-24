@@ -25,57 +25,57 @@
         <form id="site-form" class="space-y-4">
           <input type="hidden" id="f-id">
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">站点名称 *</label>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.name">站点名称 *</label>
             <input id="f-name" class="inp" maxlength="100">
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">站点域名/URL *</label>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.domain">站点域名/URL *</label>
             <input id="f-domain" class="inp" placeholder="https://example.com" maxlength="255">
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">站点简介</label>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.desc">站点简介</label>
             <textarea id="f-desc" class="inp" rows="2" maxlength="500"></textarea>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">站点图标 URL（外部）</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.icon">站点图标 URL（外部）</label>
               <input id="f-icon" class="inp" placeholder="https://..." maxlength="500">
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">排序</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.sort">排序</label>
               <input id="f-sort" type="number" class="inp" value="0">
             </div>
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">SEO 标题</label>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.seoTitle">SEO 标题</label>
             <input id="f-seo-title" class="inp" maxlength="200">
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">SEO Meta-Description</label>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.seoDesc">SEO Meta-Description</label>
             <textarea id="f-seo-desc" class="inp" rows="2" maxlength="500"></textarea>
           </div>
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">SEO Meta-Keywords</label>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.seoKw">SEO Meta-Keywords</label>
             <input id="f-seo-kw" class="inp" maxlength="500">
           </div>
           <div class="grid grid-cols-2 gap-4">
             <label class="flex items-center gap-2.5 text-sm cursor-pointer">
               <input type="checkbox" id="f-enabled" class="w-4 h-4 accent-blue-600" checked>
-              启用监控
+              <span data-i18n="sites.enabled">启用监控</span>
             </label>
             <label class="flex items-center gap-2.5 text-sm cursor-pointer">
               <input type="checkbox" id="f-maintenance" class="w-4 h-4 accent-blue-600">
-              维修模式
+              <span data-i18n="sites.maintenanceMode">维修模式</span>
             </label>
           </div>
           <div id="maintenance-note-wrap">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">维修备注</label>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.maintenanceNote">维修备注</label>
             <input id="f-maint-note" class="inp" maxlength="500" placeholder="填写维修说明，前台将显示蓝色维修状态">
           </div>
           <div id="form-err" class="hidden text-sm text-red-600 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2"></div>
           <div class="flex justify-end gap-3 pt-2">
-            <button type="button" data-close class="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium">取消</button>
-            <button type="submit" class="px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium">保存</button>
+            <button type="button" data-close class="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium" data-i18n="common.cancel">取消</button>
+            <button type="submit" class="px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium" data-i18n="common.save">保存</button>
           </div>
         </form>
       </div>
@@ -85,12 +85,13 @@
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
-    const { api, esc, h, icon, toast, STATUS_META, fmtDelay } = WebStatus;
+    const { api, esc, h, icon, toast, STATUS_META, fmtDelay, t, tStatus, skeleton } = WebStatus;
     const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
     document.querySelectorAll('.inp').forEach(e => e.className = e.className.replace('inp', '') + ' ' + inp);
 
     let sites = [];
     let maxSites = 10;
+    let list = null;
 
     (async () => {
       const main = await WebStatus.renderAdminShell('/admin/sites');
@@ -98,7 +99,7 @@
       main.appendChild(page);
 
       page.appendChild(h('div', 'flex items-center justify-between mb-5 flex-wrap gap-3',
-        '<h1 class="text-xl font-bold">站点管理</h1>' +
+        '<h1 class="text-xl font-bold" data-i18n="nav.sites">' + t('nav.sites') + '</h1>' +
         '<div class="flex items-center gap-2"><span id="count-badge" class="text-xs text-slate-400"></span>' +
         '<button id="add-btn" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium">' +
         icon('plus', '') + '</button></div>'));
@@ -107,24 +108,28 @@
       page.appendChild(box);
       const listWrap = h('div', 'p-4');
       box.appendChild(listWrap);
-      const list = h('div', 'space-y-2.5');
+      list = h('div', 'space-y-2.5');
       listWrap.appendChild(list);
 
       function renderList() {
         document.getElementById('count-badge').textContent = sites.length + ' / ' + maxSites;
         list.innerHTML = '';
         if (!sites.length) {
-          list.appendChild(h('div', 'text-center py-10 text-slate-400 text-sm', '暂无站点，点击右上角添加'));
+          list.appendChild(h('div', 'text-center py-10 text-slate-400 text-sm', t('sites.empty')));
           return;
         }
         sites.forEach(s => {
+          if (!s) return;
           const meta = STATUS_META[s.status] || STATUS_META[0];
           const el = h('div', 'border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex items-center gap-3 flex-wrap');
           // 图标
           if (s.icon_url) {
             const img = h('img', 'w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 object-contain p-1 flex-shrink-0');
             img.src = s.icon_url; img.referrerPolicy = 'no-referrer';
-            img.onerror = () => { img.replaceWith(icon('globe', 'w-5 h-5')); };
+            img.onerror = () => {
+              const fallback = h('div', 'w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0', icon('globe', 'w-5 h-5'));
+              if (img.parentNode) img.replaceWith(fallback);
+            };
             el.appendChild(img);
           } else {
             el.appendChild(h('div', 'w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0', icon('globe', 'w-5 h-5')));
@@ -133,25 +138,25 @@
           const nameRow = h('div', 'flex items-center gap-2 flex-wrap');
           nameRow.appendChild(h('span', 'font-medium', esc(s.name)));
           nameRow.appendChild(h('span', 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset ' + meta.badge,
-            icon(meta.icon, 'w-3 h-3') + '<span>' + meta.text + '</span>'));
-          if (s.enabled !== 1) nameRow.appendChild(h('span', 'text-xs text-slate-400', '监控已停用'));
+            icon(meta.icon, 'w-3 h-3') + '<span>' + esc(tStatus(s.status)) + '</span>'));
+          if (s.enabled !== 1) nameRow.appendChild(h('span', 'text-xs text-slate-400', t('sites.disabled')));
           body.appendChild(nameRow);
           body.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(s.domain)));
           if (s.maintenance === 1 && s.maintenance_note) {
-            body.appendChild(h('div', 'text-xs text-blue-600 mt-0.5', '维修：' + esc(s.maintenance_note)));
+            body.appendChild(h('div', 'text-xs text-blue-600 mt-0.5', esc(t('home.maintenance')) + esc(s.maintenance_note)));
           }
           el.appendChild(body);
 
-          el.appendChild(h('span', 'hidden sm:block text-xs text-slate-400 tabular', '延迟 ' + fmtDelay(s.last_delay)));
+          el.appendChild(h('span', 'hidden sm:block text-xs text-slate-400 tabular', esc(t('home.metric.delay')) + ' ' + fmtDelay(s.last_delay)));
 
           const actions = h('div', 'flex items-center gap-1.5');
-          const detail = h('a', 'px-2.5 py-1.5 rounded-lg text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800', '详情');
+          const detail = h('a', 'px-2.5 py-1.5 rounded-lg text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800', t('common.detail'));
           detail.href = '/site/' + s.id;
           actions.appendChild(detail);
-          const edit = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800', '编辑');
+          const edit = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800', t('common.edit'));
           edit.addEventListener('click', () => openEdit(s));
           actions.appendChild(edit);
-          const del = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10', '删除');
+          const del = h('button', 'px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10', t('common.delete'));
           del.addEventListener('click', () => doDelete(s));
           actions.appendChild(del);
           el.appendChild(actions);
@@ -160,12 +165,15 @@
       }
 
       async function load() {
+        // 骨架占位
+        list.innerHTML = '';
+        for (let i = 0; i < 3; i++) list.appendChild(skeleton('h-14'));
         try {
           const r = await api('/api/admin/sites');
           sites = r.data || [];
           maxSites = r.maxSites || 10;
           renderList();
-        } catch (e) { toast(e.message, 'error'); }
+        } catch (e) { list.innerHTML = ''; toast(e.message, 'error'); }
       }
 
       /* ---------- 弹窗 ---------- */
@@ -193,13 +201,13 @@
       }
 
       function openAdd() {
-        document.getElementById('modal-title').textContent = '新增站点';
+        document.getElementById('modal-title').textContent = t('sites.add');
         fillForm({});
         openModal();
       }
 
       function openEdit(s) {
-        document.getElementById('modal-title').textContent = '编辑站点';
+        document.getElementById('modal-title').textContent = t('sites.edit');
         fillForm(s);
         openModal();
       }
@@ -227,22 +235,30 @@
           if (id) await api('/api/admin/sites/' + id + '/update', { method: 'POST', body });
           else await api('/api/admin/sites/create', { method: 'POST', body });
           closeModal();
-          toast('保存成功', 'success');
+          toast(t('common.saved'), 'success');
           load();
         } catch (e) {
-          err.textContent = e.message || '保存失败';
+          err.textContent = e.message || t('common.loadFailed');
           err.classList.remove('hidden');
         }
       });
 
       async function doDelete(s) {
-        if (!confirm('确定删除站点「' + s.name + '」吗？相关历史数据将一并删除。')) return;
+        if (!confirm(t('sites.confirmDelete').replace('{name}', s.name || ''))) return;
         try {
           await api('/api/admin/sites/' + s.id + '/delete', { method: 'POST' });
-          toast('已删除', 'success');
+          toast(t('common.deleted'), 'success');
           load();
         } catch (e) { toast(e.message, 'error'); }
       }
+
+      // 切换语言后重渲染列表与弹窗标题
+      document.addEventListener('ws-langchange', () => {
+        if (sites.length || document.getElementById('count-badge')) renderList();
+        if (!document.getElementById('modal').classList.contains('hidden')) {
+          document.getElementById('modal-title').textContent = document.getElementById('f-id').value ? t('sites.edit') : t('sites.add');
+        }
+      });
 
       load();
     })();

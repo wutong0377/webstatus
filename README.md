@@ -16,8 +16,9 @@
 - **历史数据**：延迟曲线、状态时间线、故障记录、CSV 导出
 - **安装向导**：Web 可视化安装，支持全新初始化或上传 SQL 备份恢复
 - **数据库备份**：后台一键导出完整 .sql 备份，用于迁移恢复
+- **域名与证书安全**：域名注册到期预警（RDAP）、SSL 证书过期 / 吊销（OCSP）检测，均可后台开关
 - **安全防护**：CSRF / SSRF / XSS 防护、双重限流、登录失败锁定
-- **响应式界面**：电脑 + 手机全适配，浅色 / 深色模式
+- **响应式界面**：电脑 + 手机全适配，浅色 / 深色模式，中英文切换
 
 ## 目录
 
@@ -34,6 +35,7 @@
 - [错误码解读库说明](#错误码解读库说明)
 - [安全注意事项](#安全注意事项)
 - [高并发调优](#高并发调优)
+- [Cloudflare / CDN 优化](#cloudflare--cdn-优化)
 - [GitHub 推送步骤](#github-推送步骤)
 - [已知局限](#已知局限)
 - [常见问题排错](#常见问题排错)
@@ -295,6 +297,82 @@ location ~ /\. { deny all; }
 - **降采样**：大范围历史图表查询后端按时间桶聚合，不返回海量原始记录；
 - **自动清理**：可配置历史数据 / 日志保留天数；
 - **双重限流**：Nginx 层 + Node 层。
+
+## Cloudflare / CDN 优化
+
+### 现状：静态资源走公共 CDN
+
+前端仅依赖两个外部资源，均通过公共 CDN 加载：
+
+| 资源 | 当前引用 | 用途 |
+|---|---|---|
+| TailwindCSS（独立构建版） | `<script src="https://cdn.tailwindcss.com"></script>` | 全站样式（所有 HTML 页面的 `<head>`） |
+| Chart.js 4.4.1 | `<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>` | 站点详情页延迟曲线（`src/views/site.html`） |
+
+公共 CDN 的优点是不占用自身带宽；缺点是**内网部署、离线环境、或国内访问不稳定**时会白屏 / 图表不显示。下面两种场景建议本地化。
+
+### 场景一：内网 / 离线部署 —— 下载到本地引用
+
+1. 创建本地静态目录：
+
+   ```bash
+   mkdir -p src/views/assets/vendor
+   ```
+
+2. 下载 Tailwind 独立构建版（约 400KB，纯前端运行时）：
+
+   ```bash
+   # 与当前 CDN 同源同版本：https://cdn.tailwindcss.com
+   curl -o src/views/assets/vendor/tailwind.min.js https://cdn.tailwindcss.com
+   ```
+
+3. 下载 Chart.js UMD 构建（约 200KB）：
+
+   ```bash
+   # 版本号须与当前一致：4.4.1
+   curl -o src/views/assets/vendor/chart.umd.min.js \
+     https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
+   ```
+
+4. **替换所有页面**的 Tailwind CDN 引用（`index.html`、`site.html`、`install.html`、`admin/*.html`）：
+
+   ```html
+   <!-- 替换前 -->
+   <script src="https://cdn.tailwindcss.com"></script>
+   <!-- 替换后 -->
+   <script src="/assets/vendor/tailwind.min.js"></script>
+   ```
+
+   紧邻其下的 `tailwind.config = { darkMode: 'class' };` 保持不变。
+
+5. **仅替换 `site.html`** 的 Chart.js 引用：
+
+   ```html
+   <!-- 替换前 -->
+   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+   <!-- 替换后 -->
+   <script src="/assets/vendor/chart.umd.min.js"></script>
+   ```
+
+6. 静态资源默认走 `/assets/` 前缀，Nginx 已有的 `/assets/` 缓存规则可无缝覆盖 `vendor/` 子目录，无需额外配置。
+
+> 说明：v1.1 默认仍保持 CDN 引用以降低部署成本；如做上述本地化，务必同时下载两个文件、版本与上表一致，避免 Tailwind 或 Chart.js 版本不匹配。
+
+### 场景二：套了 Cloudflare 代理
+
+Cloudflare 会缓存静态资源并自动开启 Brotli / gzip，一般无需本地化。建议：
+
+- 在 CF 面板 **Caching → Cache Rules** 对 `/assets/*` 增加缓存规则（Edge TTL ≥ 1 天，Browser TTL 按需），可显著提升 CSS/JS 命中率；
+- 页面 HTML（`/`、`/site/*`、`/admin/*`）**不要**开 CF 缓存（需保持实时），或用 `Cache-Control: no-cache`；
+- 公开状态接口 `/api/public/*` 建议在 CF 设置 **Edge Cache** 短 TTL（如 5s，与系统 `cache_ttl` 一致）或走 CF 免费套餐默认的动态请求不缓存即可。
+
+### Nginx 压缩与静态缓存（写在 `deploy/nginx.conf`）
+
+`deploy/nginx.conf` 已给出 gzip / Brotli 与静态缓存示例注释（取消注释即可启用，需在 `http{}` 层开启 `gzip on` 等指令），要点：
+
+- **gzip**：对 `text/html`、`text/css`、`application/javascript`、`application/json`、`image/svg+xml` 等开启，`gzip_min_length 1k`，`gzip_comp_level 5`；
+- **Brotli**（需 `ngx_http_brotli` 模块）：优先级高于 gzip，Nginx 会自动根据 `Accept-Encoding` 协商；Brotli 与 gzip 可同时开启；
+- **静态缓存**：`/assets/` 已配置 `expires 1d` + `Cache-Control: public, max-age=86400`；本地化 vendor 资源后同样生效，无需改动 HTML 引用方式，保持兼容。
 
 ## GitHub 推送步骤
 

@@ -13,7 +13,7 @@
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
-    const { api, esc, h, toast } = WebStatus;
+    const { api, esc, h, toast, t } = WebStatus;
     const sel = 'px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40';
     const inp = 'px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40';
 
@@ -21,22 +21,22 @@
       const main = await WebStatus.renderAdminShell('/admin/mail-logs');
       const page = h('div', 'px-4 sm:px-6 py-6 max-w-6xl mx-auto');
       main.appendChild(page);
-      page.appendChild(h('h1', 'text-xl font-bold mb-5', '邮件发送日志'));
+      page.appendChild(h('h1', 'text-xl font-bold mb-5', t('nav.mailLogs')));
 
       // 筛选
       const filter = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3');
       const fType = h('select', sel);
-      [['all', '全部类型'], ['alert', '告警'], ['recover', '恢复'], ['test', '测试']].forEach(o => {
+      [['all', t('mailLogs.fType')], ['alert', t('mailType.alert')], ['recover', t('mailType.recover')], ['test', t('mailType.test')]].forEach(o => {
         const op = h('option', '', o[1]); op.value = o[0]; fType.appendChild(op);
       });
       const fStatus = h('select', sel);
-      [['all', '全部状态'], ['1', '成功'], ['0', '失败']].forEach(o => {
+      [['all', t('mailLogs.fStatus')], ['1', t('common.success')], ['0', t('common.failed')]].forEach(o => {
         const op = h('option', '', o[1]); op.value = o[0]; fStatus.appendChild(op);
       });
       const fKeyword = h('input', inp);
-      fKeyword.placeholder = '搜索收件邮箱';
-      const btn = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '查询');
-      [h('div', 'text-xs text-slate-400 pb-2', '类型'), h('div', 'text-xs text-slate-400 pb-2', '状态'), h('div', 'text-xs text-slate-400 pb-2', '关键字')].forEach((lb, i) => {
+      fKeyword.placeholder = t('mailLogs.fKeyword');
+      const btn = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', t('common.search'));
+      [h('div', 'text-xs text-slate-400 pb-2', t('mailLogs.lblType')), h('div', 'text-xs text-slate-400 pb-2', t('mailLogs.lblStatus')), h('div', 'text-xs text-slate-400 pb-2', t('mailLogs.lblKeyword'))].forEach((lb, i) => {
         const cell = h('div', '');
         cell.appendChild(lb);
         cell.appendChild([fType, fStatus, fKeyword][i]);
@@ -53,8 +53,8 @@
       box.appendChild(tableWrap);
       const table = h('table', 'w-full text-sm');
       table.innerHTML = '<thead><tr class="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-slate-800">' +
-        '<th class="py-2.5 pr-3 font-medium">时间</th><th class="py-2.5 pr-3 font-medium">收件邮箱</th>' +
-        '<th class="py-2.5 pr-3 font-medium">类型</th><th class="py-2.5 pr-3 font-medium">状态</th><th class="py-2.5 font-medium">失败原因</th></tr></thead>';
+        '<th class="py-2.5 pr-3 font-medium">' + esc(t('mailLogs.th.time')) + '</th><th class="py-2.5 pr-3 font-medium">' + esc(t('mailLogs.th.to')) + '</th>' +
+        '<th class="py-2.5 pr-3 font-medium">' + esc(t('mailLogs.th.type')) + '</th><th class="py-2.5 pr-3 font-medium">' + esc(t('mailLogs.th.status')) + '</th><th class="py-2.5 font-medium">' + esc(t('mailLogs.th.error')) + '</th></tr></thead>';
       const tbody = h('tbody', '');
       table.appendChild(tbody);
       tableWrap.appendChild(table);
@@ -79,17 +79,17 @@
           total = r.total;
           tbody.innerHTML = '';
           if (!r.data.length) {
-            tbody.appendChild(h('tr', '', '<td colspan="5" class="py-8 text-center text-slate-400">暂无记录</td>'));
+            tbody.appendChild(h('tr', '', '<td colspan="5" class="py-8 text-center text-slate-400">' + esc(t('common.empty')) + '</td>'));
           }
           r.data.forEach(m => {
             const tr = h('tr', 'border-b border-slate-100 dark:border-slate-800 last:border-0');
-            const typeText = m.mail_type === 'alert' ? '告警' : m.mail_type === 'recover' ? '恢复' : '测试';
+            const typeText = m.mail_type === 'alert' ? t('mailType.alert') : m.mail_type === 'recover' ? t('mailType.recover') : t('mailType.test');
             tr.innerHTML = '<td class="py-2.5 pr-3 text-xs text-slate-500 tabular">' + esc(m.created_at) + '</td>' +
               '<td class="py-2.5 pr-3">' + esc(m.to_email) + '</td>' +
-              '<td class="py-2.5 pr-3 text-xs text-slate-500">' + typeText + '</td>' +
+              '<td class="py-2.5 pr-3 text-xs text-slate-500">' + esc(typeText) + '</td>' +
               '<td class="py-2.5 pr-3"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset ' +
               (m.status === 1 ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400') + '">' +
-              (m.status === 1 ? '成功' : '失败') + '</span></td>' +
+              esc(m.status === 1 ? t('common.success') : t('common.failed')) + '</span></td>' +
               '<td class="py-2.5 text-xs text-slate-400 max-w-[220px] truncate">' + esc(m.error_msg) + '</td>';
             tbody.appendChild(tr);
           });
@@ -100,13 +100,13 @@
       function renderPager() {
         const pages = Math.max(1, Math.ceil(total / 15));
         pager.innerHTML = '';
-        pager.appendChild(h('span', 'text-xs text-slate-400', '共 ' + total + ' 条 · 第 ' + pageNum + ' / ' + pages + ' 页'));
+        pager.appendChild(h('span', 'text-xs text-slate-400', esc(t('mailLogs.pager').replace('{total}', total).replace('{page}', pageNum).replace('{pages}', pages))));
         const btns = h('div', 'flex gap-2');
-        const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', '上一页');
+        const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', t('common.prevPage'));
         prev.disabled = pageNum <= 1;
         prev.addEventListener('click', () => { pageNum--; load(); });
         btns.appendChild(prev);
-        const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', '下一页');
+        const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', t('common.nextPage'));
         next.disabled = pageNum >= pages;
         next.addEventListener('click', () => { pageNum++; load(); });
         btns.appendChild(next);
@@ -114,6 +114,8 @@
       }
 
       btn.addEventListener('click', () => { pageNum = 1; load(); });
+      // 切换语言后重新加载（筛选条件不变）
+      document.addEventListener('ws-langchange', () => { load(); });
       load();
     })();
   })();

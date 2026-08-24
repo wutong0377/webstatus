@@ -17,11 +17,14 @@
         <a href="/" class="p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </a>
-        <span class="font-semibold truncate" id="page-title">站点详情</span>
+        <span class="font-semibold truncate" id="page-title" data-i18n="site.title">站点详情</span>
       </div>
-      <button id="theme-btn" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
+      <div class="flex items-center gap-1.5">
+        <span id="lang-btn" class="inline-flex"></span>
+        <button id="theme-btn" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -33,41 +36,46 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
         <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
-          <h2 class="font-semibold text-sm">延迟曲线</h2>
+          <h2 class="font-semibold text-sm" data-i18n="site.chartTitle">延迟曲线</h2>
           <div class="flex items-center gap-3">
             <div class="bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 flex text-xs" id="range-group"></div>
             <a id="csv-link" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-medium">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              导出 CSV
+              <span data-i18n="site.exportCsv">导出 CSV</span>
             </a>
           </div>
         </div>
-        <div class="h-64">
-          <canvas id="chart"></canvas>
+        <div class="h-64 relative">
+          <div id="chart-skeleton" class="absolute inset-0"></div>
+          <canvas id="chart" class="hidden"></canvas>
         </div>
-        <div class="mt-2 text-center text-xs text-slate-400">响应耗时（ms），颜色对应状态</div>
+        <div class="mt-2 text-center text-xs text-slate-400" data-i18n="site.chartHint">响应耗时（ms），颜色对应状态</div>
       </div>
 
       <!-- 状态时间线 -->
       <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-        <h2 class="font-semibold text-sm mb-4">状态时间线</h2>
+        <h2 class="font-semibold text-sm mb-4" data-i18n="site.timelineTitle">状态时间线</h2>
         <div id="timeline" class="timeline text-sm"></div>
-        <div id="timeline-empty" class="hidden text-center text-slate-400 text-sm py-8">该时间段内暂无状态记录</div>
+        <div id="timeline-empty" class="hidden text-center text-slate-400 text-sm py-8" data-i18n="site.timelineEmpty">该时间段内暂无状态记录</div>
       </div>
     </div>
 
     <!-- 故障记录 -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-      <h2 class="font-semibold text-sm mb-4">故障记录</h2>
+      <h2 class="font-semibold text-sm mb-4" data-i18n="site.faultTitle">故障记录</h2>
       <div id="fault-list" class="space-y-2.5"></div>
-      <div id="fault-empty" class="hidden text-center text-slate-400 text-sm py-8">暂无历史故障</div>
+      <div id="fault-empty" class="hidden text-center text-slate-400 text-sm py-8" data-i18n="site.faultEmpty">暂无历史故障</div>
     </div>
   </main>
+
+  <footer class="max-w-5xl mx-auto px-4 py-8 text-center text-xs text-slate-400">
+    <div id="ws-copyright"></div>
+  </footer>
 
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
-    const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime } = WebStatus;
+    const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
     const $ = s => document.querySelector(s);
     const id = Number(location.pathname.split('/').pop());
     let chart = null;
@@ -80,23 +88,26 @@
       const m = Math.floor((sec % 3600) / 60);
       const s = sec % 60;
       const parts = [];
-      if (d) parts.push(d + '天');
-      if (hh) parts.push(hh + '时');
-      if (m) parts.push(m + '分');
-      if (s || !parts.length) parts.push(s + '秒');
+      if (d) parts.push(d + t('dur.day'));
+      if (hh) parts.push(hh + t('dur.hour'));
+      if (m) parts.push(m + t('dur.min'));
+      if (s || !parts.length) parts.push(s + t('dur.sec'));
       return parts.join('');
     }
     let range = 'day';
     const RANGES = [
-      { key: 'hour', label: '1小时' },
-      { key: 'day', label: '24小时' },
-      { key: 'week', label: '7天' },
-      { key: 'month', label: '30天' }
+      { key: 'hour', keyLabel: 'site.range.hour' },
+      { key: 'day', keyLabel: 'site.range.day' },
+      { key: 'week', keyLabel: 'site.range.week' },
+      { key: 'month', keyLabel: 'site.range.month' }
     ];
 
     /* 主题 */
     const themeBtn = $('#theme-btn');
     themeBtn.addEventListener('click', WebStatus.toggleTheme);
+
+    /* 语言切换按钮 */
+    $('#lang-btn').appendChild(WebStatus.langBtn());
 
     /* 范围切换 */
     function renderRanges() {
@@ -104,7 +115,7 @@
       g.innerHTML = '';
       RANGES.forEach(r => {
         const b = h('button', 'px-2.5 py-1 rounded-md font-medium' + (r.key === range ? ' bg-white dark:bg-slate-700 shadow-sm' : ' text-slate-500'));
-        b.textContent = r.label;
+        b.textContent = t(r.keyLabel);
         b.addEventListener('click', () => { range = r.key; renderRanges(); load(); });
         g.appendChild(b);
       });
@@ -118,23 +129,28 @@
     }
 
     function renderChart(points) {
-      const labels = points.map(p => String(p.checked_at).slice(5, 16));
-      const data = points.map(p => p.delay);
-      const colors = points.map(p => statusColor(p.status));
-      const ctx = $('#chart').getContext('2d');
+      const canvas = $('#chart');
+      const sk = $('#chart-skeleton');
+      if (sk) sk.remove();
+      canvas.classList.remove('hidden');
+      const labels = (points || []).map(p => String(p.checked_at || '').slice(5, 16));
+      const data = (points || []).map(p => p.delay);
+      const colors = (points || []).map(p => statusColor(p.status));
+      const ctx = canvas.getContext('2d');
       if (chart) chart.destroy();
+      const small = window.innerWidth < 640;
       chart = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
           datasets: [{
-            label: '响应耗时(ms)',
+            label: t('site.chartLabel'),
             data,
             borderColor: colors,
             backgroundColor: 'rgba(59,130,246,0.08)',
             pointBackgroundColor: colors,
-            pointRadius: 2,
-            pointHoverRadius: 4,
+            pointRadius: small ? 0 : 2,
+            pointHoverRadius: small ? 3 : 4,
             borderWidth: 1.5,
             tension: 0.25,
             fill: true
@@ -150,8 +166,9 @@
               callbacks: {
                 title: items => items[0] ? String(items[0].label).slice(0, 11) : '',
                 label: ctx => {
-                  const p = points[ctx.dataIndex];
-                  return '耗时 ' + p.delay + ' ms · ' + (STATUS_META[p.status] ? STATUS_META[p.status].text : '');
+                  const p = (points || [])[ctx.dataIndex];
+                  if (!p) return '';
+                  return t('site.tooltipDelay') + ' ' + p.delay + ' ms · ' + tStatus(p.status);
                 }
               }
             }
@@ -168,7 +185,7 @@
       const tl = $('#timeline');
       const empty = $('#timeline-empty');
       tl.innerHTML = '';
-      if (!changes.length) {
+      if (!(changes || []).length) {
         tl.classList.add('hidden');
         empty.classList.remove('hidden');
         return;
@@ -180,9 +197,9 @@
         const item = h('div', 'timeline-item tl-' + (c.status === 1 ? 'up' : c.status === 2 ? 'slow' : c.status === 3 ? 'down' : 'maintenance'));
         const row = h('div', 'flex items-center gap-2 flex-wrap');
         row.appendChild(h('span', 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset ' + meta.badge,
-          icon(meta.icon, 'w-3 h-3') + '<span>' + meta.text + '</span>'));
+          icon(meta.icon, 'w-3 h-3') + '<span>' + esc(tStatus(c.status)) + '</span>'));
         if (c.delay) row.appendChild(h('span', 'text-xs text-slate-400 tabular', fmtDelay(c.delay)));
-        row.appendChild(h('span', 'text-xs text-slate-400 ml-auto', esc(String(c.checked_at).slice(5, 16))));
+        row.appendChild(h('span', 'text-xs text-slate-400 ml-auto', esc(String(c.checked_at || '').slice(5, 16))));
         item.appendChild(row);
         if (c.error_code) {
           item.appendChild(h('div', 'mt-1 text-xs text-slate-500', esc(c.error_code) + (c.error_msg ? ' · ' + esc(c.error_msg) : '')));
@@ -195,7 +212,7 @@
       const list = $('#fault-list');
       const empty = $('#fault-empty');
       list.innerHTML = '';
-      if (!faults.length) {
+      if (!(faults || []).length) {
         list.classList.add('hidden');
         empty.classList.remove('hidden');
         return;
@@ -207,21 +224,21 @@
         const el = h('div', 'border border-slate-200 dark:border-slate-800 rounded-lg p-3.5 flex flex-col sm:flex-row sm:items-center gap-2');
         const left = h('div', 'flex items-center gap-2 min-w-0');
         left.appendChild(h('span', 'w-2 h-2 rounded-full flex-shrink-0 ' + meta.dot));
-        left.appendChild(h('span', 'text-sm font-medium', esc(meta.text)));
+        left.appendChild(h('span', 'text-sm font-medium', esc(tStatus(f.fault_status))));
         if (f.error_code) left.appendChild(h('span', 'text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500', esc(f.error_code)));
         el.appendChild(left);
         const mid = h('div', 'flex-1 text-xs text-slate-400 min-w-0');
         mid.textContent = f.error_msg || '';
         el.appendChild(mid);
         const right = h('div', 'text-xs text-slate-500 tabular sm:text-right');
-        right.textContent = fmtTime(f.started_at) + (f.ended_at ? ' → ' + fmtTime(f.ended_at) : ' · 进行中') + (f.duration_sec ? '（持续 ' + fmtDur(f.duration_sec) + '）' : '');
+        right.textContent = fmtTime(f.started_at) + (f.ended_at ? ' → ' + fmtTime(f.ended_at) : ' · ' + t('site.ongoing')) + (f.duration_sec ? '（' + t('site.duration') + ' ' + fmtDur(f.duration_sec) + '）' : '');
         el.appendChild(right);
         list.appendChild(el);
       });
     }
 
     function renderSite(site) {
-      $('#page-title').textContent = site.name || '站点详情';
+      $('#page-title').textContent = (site && site.name) || t('site.title');
       const info = $('#site-info');
       const meta = STATUS_META[site.status] || STATUS_META[0];
       info.innerHTML = '';
@@ -230,7 +247,7 @@
         const img = h('img', 'w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 object-contain p-2');
         img.src = site.icon_url;
         img.referrerPolicy = 'no-referrer';
-        img.onerror = () => { img.remove(); };
+        img.onerror = () => { if (img.parentNode) img.remove(); };
         top.appendChild(img);
       } else {
         top.appendChild(h('div', 'w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400', icon('globe', 'w-7 h-7')));
@@ -239,17 +256,17 @@
       const titleRow = h('div', 'flex items-center gap-2 flex-wrap');
       titleRow.appendChild(h('h1', 'text-xl font-bold', esc(site.name)));
       titleRow.appendChild(h('span', 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset ' + meta.badge,
-        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + meta.text + '</span>'));
+        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + esc(tStatus(site.status)) + '</span>'));
       body.appendChild(titleRow);
       body.appendChild(h('div', 'text-sm text-slate-400 mt-1 break-all', esc(site.domain)));
       if (site.description) body.appendChild(h('p', 'mt-2 text-sm text-slate-500 dark:text-slate-400', esc(site.description)));
       if (site.maintenance === 1 && site.maintenance_note) {
-        body.appendChild(h('div', 'mt-2 text-xs text-blue-600 dark:text-blue-400', '维修说明：' + esc(site.maintenance_note)));
+        body.appendChild(h('div', 'mt-2 text-xs text-blue-600 dark:text-blue-400', esc(t('home.maintenance')) + esc(site.maintenance_note)));
       }
       const metrics = h('div', 'mt-3 flex flex-wrap gap-2 text-xs');
-      const m1 = h('span', 'px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', '延迟 ' + fmtDelay(site.last_delay));
-      const m2 = h('span', 'px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', 'HTTP ' + (site.last_http_code || '-'));
-      const m3 = h('span', 'px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', '最近检测 ' + (site.last_checked_at ? esc(site.last_checked_at) : '-'));
+      const m1 = h('span', 'px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', esc(t('home.metric.delay')) + ' ' + fmtDelay(site.last_delay));
+      const m2 = h('span', 'px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', esc(t('site.metric.http')) + ' ' + (site.last_http_code || '-'));
+      const m3 = h('span', 'px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', esc(t('home.metric.checked')) + ' ' + (site.last_checked_at ? esc(site.last_checked_at) : '-'));
       metrics.appendChild(m1); metrics.appendChild(m2); metrics.appendChild(m3);
       body.appendChild(metrics);
       top.appendChild(body);
@@ -259,21 +276,31 @@
     async function load() {
       try {
         const r = await api('/api/public/site/' + id + '?range=' + range);
-        const d = r.data;
-        renderSite(d.site);
-        renderChart(d.chart || []);
+        const d = r.data || {};
+        renderSite(d.site || {});
+        try { renderChart(d.chart || []); } catch (e) { /* 图表失败不影响时间线/故障 */ }
         renderTimeline(d.changes || []);
         renderFaults(d.faults || []);
         $('#csv-link').href = '/api/public/site/' + id + '/export';
       } catch (e) {
-        toast(e.message || '加载失败', 'error');
+        toast(e.message || t('common.loadFailed'), 'error');
       }
     }
 
+    // 初始骨架
+    const infoSk = $('#site-info');
+    infoSk.appendChild(skeleton('h-16'));
+    const chartSk = $('#chart-skeleton');
+    if (chartSk) chartSk.appendChild(skeleton('h-24 w-full'));
+
     renderRanges();
     load();
+    // 切换语言后重新拉取（含图表 tooltip 文案）
+    document.addEventListener('ws-langchange', () => { renderRanges(); load(); });
     // 详情页低频轮询（3 倍前端刷新间隔），此处用 60s
     setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, 60000);
+
+    WebStatus.renderCopyright();
   })();
   </script>
 </body>

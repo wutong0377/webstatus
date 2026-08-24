@@ -10,6 +10,8 @@
 </head>
 <body class="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
+  <div class="fixed top-4 right-4 z-50" id="lang-holder"></div>
+
   <div class="max-w-3xl mx-auto px-4 py-8">
     <!-- 品牌 -->
     <div class="text-center mb-8">
@@ -17,7 +19,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       </div>
       <h1 class="text-2xl font-bold mt-2">WebStatus 网站状态监控</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">安装向导</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1" data-i18n="install.wizard">安装向导</p>
     </div>
 
     <!-- 步骤指示器 -->
@@ -42,18 +44,22 @@
     </div>
 
     <p class="text-center text-xs text-slate-400 mt-6">安装完成后 /install 路由将被永久禁用</p>
+    <div id="ws-copyright" class="mt-4"></div>
   </div>
 
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
-    const { api, esc, h, icon, toast } = WebStatus;
-    const STEPS = ['环境检查', '数据库', '模式选择', '管理员', '系统参数', 'SMTP', '完成'];
+    const { api, esc, h, icon, toast, t } = WebStatus;
+    const STEPS = ['install.step1', 'install.step2', 'install.step3', 'install.step4', 'install.step5', 'install.step6', 'install.step7'];
     const panels = {};
     let currentStep = 1;
     let dbInfo = { host: '127.0.0.1', port: 3306, user: '', password: '', database: 'webstatus' };
     let smtpInfo = { enabled: false, host: '', port: 465, secure: true, user: '', pass: '', from_name: 'WebStatus', from_email: '' };
     let uploaded = null; // { path(session) }
+
+    // 语言切换按钮
+    document.getElementById('lang-holder').appendChild(WebStatus.langBtn());
 
     /* ---------- 步骤指示器 ---------- */
     function renderSteps() {
@@ -64,7 +70,7 @@
         const dot = h('div', 'step-dot' + (n === currentStep ? ' active' : (n < currentStep ? ' done' : '')));
         dot.textContent = n < currentStep ? '✓' : n;
         wrap.appendChild(dot);
-        const text = h('div', 'text-[11px] whitespace-nowrap mt-1 text-center' + (n === currentStep ? ' text-slate-900 dark:text-slate-100 font-medium' : ' text-slate-400'), label);
+        const text = h('div', 'text-[11px] whitespace-nowrap mt-1 text-center' + (n === currentStep ? ' text-slate-900 dark:text-slate-100 font-medium' : ' text-slate-400'), t(label));
         const cell = h('div', 'flex flex-col items-center');
         cell.appendChild(dot);
         cell.appendChild(text);
@@ -97,7 +103,7 @@
     /* ============ Step 1 环境自检 ============ */
     async function initStep1() {
       const panel = panels[1];
-      panel.innerHTML = '<div class="text-center py-6 text-slate-400">正在检查运行环境...</div>';
+      panel.innerHTML = '<div class="text-center py-6 text-slate-400">' + esc(t('install.checking')) + '</div>';
       const r = await api('/install/api/check').catch(() => ({ code: -1 }));
       panel.innerHTML = '';
       const items = [
@@ -115,7 +121,7 @@
           '</span><div class="flex-1 min-w-0"><div class="text-sm font-medium">' + esc(it.label) + '</div><div class="text-xs text-slate-400">' + esc(it.value) + '</div></div>'));
       });
       const btn = h('button', 'mt-6 ' + btnPrimary);
-      btn.textContent = r.ok ? '通过，下一步' : '环境异常，请先修复（仍可重试检查）';
+      btn.textContent = r.ok ? t('install.next') : t('install.retry');
       btn.addEventListener('click', () => r.ok ? go(2) : initStep1());
       panel.appendChild(btn);
     }
@@ -124,7 +130,7 @@
     function initStep2() {
       const panel = panels[2];
       panel.innerHTML = '';
-      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '数据库连接配置'));
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', t('install.dbConfig')));
       panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '填写 MySQL 连接信息，建议使用低权限账号（不要用 root）。'));
       const form = h('div', 'space-y-4');
       form.appendChild(field('数据库主机', `<input id="db-host" class="${inputCls}" value="${esc(dbInfo.host)}">`));
@@ -139,7 +145,7 @@
       msg.id = 'db-msg';
       panel.appendChild(msg);
       const btn = h('button', 'mt-6 ' + btnPrimary);
-      btn.textContent = '测试连接并继续';
+      btn.textContent = t('install.testDb');
       btn.addEventListener('click', async () => {
         dbInfo = {
           host: document.getElementById('db-host').value.trim(),
@@ -148,18 +154,18 @@
           password: document.getElementById('db-pass').value,
           database: document.getElementById('db-name').value.trim() || 'webstatus'
         };
-        btn.disabled = true; btn.textContent = '连接测试中...';
+        btn.disabled = true; btn.textContent = t('install.testingDb');
         msg.classList.remove('hidden', 'text-emerald-600', 'text-red-600');
         try {
           const r = await api('/install/api/test-db', { method: 'POST', body: dbInfo });
           msg.textContent = '连接成功 · MySQL ' + r.version + (r.dbExists ? ' · 数据库已存在' : ' · 数据库不存在（初始化时自动创建）');
           msg.classList.add('text-emerald-600');
-          btn.disabled = false; btn.textContent = '测试连接并继续';
+          btn.disabled = false; btn.textContent = t('install.testDb');
           go(3);
         } catch (e) {
           msg.textContent = e.message;
           msg.classList.add('text-red-600');
-          btn.disabled = false; btn.textContent = '测试连接并继续';
+          btn.disabled = false; btn.textContent = t('install.testDb');
         }
       });
       panel.appendChild(btn);
@@ -169,26 +175,26 @@
     function initStep3() {
       const panel = panels[3];
       panel.innerHTML = '';
-      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '数据库初始化模式'));
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', t('install.modeInit')));
       panel.appendChild(h('p', 'text-sm text-slate-400 mb-6', '二选一，决定目标数据库如何处理。'));
       const grid = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
 
       // 模式 A
       const cardA = h('div', 'border border-slate-200 dark:border-slate-700 rounded-xl p-5 flex flex-col');
-      cardA.innerHTML = '<div class="text-blue-600 mb-3">' + icon('database', 'w-8 h-8') + '</div><h3 class="font-semibold">模式 A：全新初始化</h3>' +
+      cardA.innerHTML = '<div class="text-blue-600 mb-3">' + icon('database', 'w-8 h-8') + '</div><h3 class="font-semibold">' + esc(t('install.modeA')) + '</h3>' +
         '<p class="text-sm text-slate-400 mt-1.5 flex-1">自动创建数据表、初始化系统参数。适合首次部署。</p>';
       const btnA = h('button', 'mt-4 px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium hover:opacity-90');
-      btnA.textContent = '选择全新初始化';
+      btnA.textContent = t('install.chooseFresh');
       btnA.addEventListener('click', () => doInitA(btnA));
       cardA.appendChild(btnA);
       grid.appendChild(cardA);
 
       // 模式 B
       const cardB = h('div', 'border border-slate-200 dark:border-slate-700 rounded-xl p-5 flex flex-col');
-      cardB.innerHTML = '<div class="text-emerald-600 mb-3">' + icon('restore', 'w-8 h-8') + '</div><h3 class="font-semibold">模式 B：上传备份恢复</h3>' +
+      cardB.innerHTML = '<div class="text-emerald-600 mb-3">' + icon('restore', 'w-8 h-8') + '</div><h3 class="font-semibold">' + esc(t('install.modeB')) + '</h3>' +
         '<p class="text-sm text-slate-400 mt-1.5 flex-1">上传以往导出的 .sql 备份文件，恢复历史数据与全部配置。</p>';
       const btnB = h('button', 'mt-4 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800');
-      btnB.textContent = '选择恢复备份';
+      btnB.textContent = t('install.chooseRestore');
       btnB.addEventListener('click', () => initStep3B(panel, grid));
       cardB.appendChild(btnB);
       grid.appendChild(cardB);
@@ -199,7 +205,7 @@
     function initStep3B(panel, grid) {
       grid.remove();
       panel.innerHTML = '';
-      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '模式 B：上传 SQL 备份恢复'));
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', t('install.modeBTitle')));
       panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '仅接受本系统导出的 .sql 备份文件，最大 16MB。'));
       const back = h('button', 'mb-4 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 inline-flex items-center gap-1',
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>返回');
@@ -279,7 +285,7 @@
         go(4);
       } catch (e) {
         toast(e.message, 'error');
-        btn.disabled = false; btn.textContent = '选择全新初始化';
+        btn.disabled = false; btn.textContent = t('install.chooseFresh');
       }
     }
 
@@ -299,7 +305,7 @@
     function initStep4() {
       const panel = panels[4];
       panel.innerHTML = '';
-      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '创建管理员账号'));
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', t('install.adminCreate')));
       panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '用于登录后台管理系统。密码将使用 bcrypt 加密存储。'));
       const form = h('div', 'space-y-4');
       form.appendChild(field('用户名', `<input id="ad-user" class="${inputCls}" placeholder="3-50 个字符">`));
@@ -310,7 +316,7 @@
       msg.id = 'admin-msg';
       panel.appendChild(msg);
       const btn = h('button', 'mt-6 ' + btnPrimary);
-      btn.textContent = '创建账号，下一步';
+      btn.textContent = t('install.createAdmin');
       btn.addEventListener('click', async () => {
         const u = document.getElementById('ad-user').value.trim();
         const p = document.getElementById('ad-pass').value;
@@ -322,7 +328,7 @@
           // 管理员密码用独立字段 admin_password，避免覆盖 dbInfo 中的数据库密码
           await api('/install/api/setup-admin', { method: 'POST', body: { ...dbInfo, username: u, admin_password: p } });
           go(5);
-        } catch (e) { msg.textContent = e.message; msg.classList.remove('hidden'); btn.disabled = false; btn.textContent = '创建账号，下一步'; }
+        } catch (e) { msg.textContent = e.message; msg.classList.remove('hidden'); btn.disabled = false; btn.textContent = t('install.createAdmin'); }
       });
       panel.appendChild(btn);
     }
@@ -331,7 +337,7 @@
     function initStep5() {
       const panel = panels[5];
       panel.innerHTML = '';
-      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '系统参数配置'));
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', t('install.sysParams')));
       panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '以下参数后期可在后台「系统设置」中修改。'));
       const defaults = {
         slow_threshold: { label: '卡顿延迟阈值(ms)', val: 1500 },
@@ -354,20 +360,20 @@
       msg.id = 'param-msg';
       panel.appendChild(msg);
       const row = h('div', 'mt-6 flex items-center justify-between gap-3');
-      const backBtn = h('button', btnGhost, '上一步');
+      const backBtn = h('button', btnGhost, t('install.back'));
       backBtn.addEventListener('click', () => go(4));
       const btn = h('button', 'flex-1 sm:flex-none ' + btnPrimary);
-      btn.textContent = '保存参数，下一步';
+      btn.textContent = t('install.saveParams');
       btn.addEventListener('click', async () => {
         const body = { ...dbInfo };
         Object.keys(defaults).forEach(k => {
           body[k] = Number(document.getElementById('par-' + k).value) || defaults[k].val;
         });
-        btn.disabled = true; btn.textContent = '保存中...';
+        btn.disabled = true; btn.textContent = t('common.saving');
         try {
           await api('/install/api/save-params', { method: 'POST', body });
           go(6);
-        } catch (e) { msg.textContent = e.message; msg.classList.remove('hidden'); btn.disabled = false; btn.textContent = '保存参数，下一步'; }
+        } catch (e) { msg.textContent = e.message; msg.classList.remove('hidden'); btn.disabled = false; btn.textContent = t('install.saveParams'); }
       });
       row.appendChild(backBtn);
       row.appendChild(btn);
@@ -378,7 +384,7 @@
     function initStep6() {
       const panel = panels[6];
       panel.innerHTML = '';
-      panel.appendChild(h('h2', 'text-lg font-bold mb-1', 'SMTP 邮件配置（可选）'));
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', t('install.smtpConfig')));
       panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '用于发送状态告警邮件。可在后台随时修改，也可跳过。'));
       const form = h('div', 'space-y-4');
       const toggle = h('label', 'flex items-center gap-3 cursor-pointer');
@@ -413,11 +419,11 @@
       form.appendChild(grid2);
       panel.appendChild(form);
       const row = h('div', 'mt-6 flex items-center justify-between gap-3');
-      const backBtn = h('button', btnGhost, '上一步');
+      const backBtn = h('button', btnGhost, t('install.back'));
       backBtn.addEventListener('click', () => go(5));
-      const skipBtn = h('button', btnGhost, '跳过此步');
+      const skipBtn = h('button', btnGhost, t('install.skipSmtp'));
       const nextBtn = h('button', 'flex-1 sm:flex-none ' + btnPrimary);
-      nextBtn.textContent = '保存并继续';
+      nextBtn.textContent = t('install.saveSmtp');
       nextBtn.addEventListener('click', async () => {
         smtpInfo = {
           enabled: document.getElementById('smtp-enable').checked,
@@ -429,11 +435,11 @@
           from_name: document.getElementById('sm-from-name').value.trim() || 'WebStatus',
           from_email: document.getElementById('sm-from-email').value.trim()
         };
-        nextBtn.disabled = true; nextBtn.textContent = '保存中...';
+        nextBtn.disabled = true; nextBtn.textContent = t('common.saving');
         try {
           await api('/install/api/save-smtp', { method: 'POST', body: { smtp: smtpInfo } });
           go(7);
-        } catch (e) { toast(e.message, 'error'); nextBtn.disabled = false; nextBtn.textContent = '保存并继续'; }
+        } catch (e) { toast(e.message, 'error'); nextBtn.disabled = false; nextBtn.textContent = t('install.saveSmtp'); }
       });
       skipBtn.addEventListener('click', () => {
         smtpInfo = { ...smtpInfo, enabled: false };
@@ -451,7 +457,7 @@
       panel.innerHTML = '';
       panel.appendChild(h('div', 'text-center py-6',
         '<div class="text-emerald-500 mb-4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 mx-auto"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
-        '<h2 class="text-xl font-bold">即将完成安装</h2>' +
+        '<h2 class="text-xl font-bold">' + esc(t('install.finishTitle')) + '</h2>' +
         '<p class="text-sm text-slate-400 mt-2">系统将生成 config.json 配置文件，安装完成后 /install 路由永久禁用。</p>'));
       const summary = h('div', 'mt-6 space-y-2 text-sm bg-slate-50 dark:bg-slate-800 rounded-xl p-4');
       summary.innerHTML =
@@ -461,25 +467,25 @@
       panel.appendChild(summary);
       const row = h('div', 'mt-6 flex items-center justify-between gap-3');
       if (smtpInfo.enabled !== undefined) {
-        const backBtn = h('button', btnGhost, '上一步');
+        const backBtn = h('button', btnGhost, t('install.back'));
         backBtn.addEventListener('click', () => go(6));
         row.appendChild(backBtn);
       }
       const btn = h('button', 'flex-1 sm:flex-none ' + btnPrimary);
-      btn.textContent = '完成安装';
+      btn.textContent = t('install.finish');
       btn.addEventListener('click', async () => {
-        btn.disabled = true; btn.textContent = '正在生成配置...';
+        btn.disabled = true; btn.textContent = t('install.finishing');
         try {
           await api('/install/api/finish', { method: 'POST', body: { db: dbInfo, smtp: smtpInfo } });
           panel.innerHTML = '';
           panel.appendChild(h('div', 'text-center py-10',
             '<div class="text-blue-500 mb-4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 mx-auto"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>' +
-            '<h2 class="text-xl font-bold">安装完成</h2>' +
+            '<h2 class="text-xl font-bold">' + esc(t('install.complete')) + '</h2>' +
             '<p class="text-sm text-slate-400 mt-2 max-w-md mx-auto">请重启服务（pm2 restart webstatus 或重新运行 npm start），然后访问后台登录页。</p>' +
             '<div class="mt-6"><a href="/admin/login" class="px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium">重启后前往登录</a></div>'));
         } catch (e) {
           toast(e.message, 'error');
-          btn.disabled = false; btn.textContent = '完成安装';
+          btn.disabled = false; btn.textContent = t('install.finish');
         }
       });
       row.appendChild(btn);
@@ -496,6 +502,7 @@
     initStep5();
     initStep6();
     initStep7();
+    WebStatus.renderCopyright();
   })();
   </script>
 </body>

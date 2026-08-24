@@ -13,7 +13,7 @@
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
-    const { api, esc, h, toast } = WebStatus;
+    const { api, esc, h, toast, t } = WebStatus;
     const sel = 'px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40';
     const inp = 'px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40';
 
@@ -21,19 +21,19 @@
       const main = await WebStatus.renderAdminShell('/admin/fault-logs');
       const page = h('div', 'px-4 sm:px-6 py-6 max-w-6xl mx-auto');
       main.appendChild(page);
-      page.appendChild(h('h1', 'text-xl font-bold mb-5', '故障日志'));
+      page.appendChild(h('h1', 'text-xl font-bold mb-5', t('nav.faultLogs')));
 
       const filter = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3');
       const fSite = h('select', sel);
-      const allSite = h('option', '全部站点'); allSite.value = ''; fSite.appendChild(allSite);
+      const allSite = h('option', t('faultLogs.allSites')); allSite.value = ''; fSite.appendChild(allSite);
       const fStatus = h('select', sel);
-      [['', '全部状态'], ['3', '离线'], ['2', '卡顿']].forEach(o => {
+      [['', t('faultLogs.allStatus')], ['3', t('status.down')], ['2', t('status.slow')]].forEach(o => {
         const op = h('option', o[1]); op.value = o[0]; fStatus.appendChild(op);
       });
       const fCode = h('input', inp);
-      fCode.placeholder = '错误码（如 HTTP_503）';
-      const btn = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '查询');
-      [h('div', 'text-xs text-slate-400 pb-2', '站点'), h('div', 'text-xs text-slate-400 pb-2', '状态'), h('div', 'text-xs text-slate-400 pb-2', '错误码')].forEach((lb, i) => {
+      fCode.placeholder = t('faultLogs.codePlaceholder');
+      const btn = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', t('common.search'));
+      [h('div', 'text-xs text-slate-400 pb-2', t('faultLogs.lblSite')), h('div', 'text-xs text-slate-400 pb-2', t('faultLogs.lblStatus')), h('div', 'text-xs text-slate-400 pb-2', t('faultLogs.lblCode'))].forEach((lb, i) => {
         const cell = h('div', '');
         cell.appendChild(lb);
         cell.appendChild([fSite, fStatus, fCode][i]);
@@ -68,27 +68,27 @@
           total = r.total;
           list.innerHTML = '';
           if (!r.data.length) {
-            list.appendChild(h('div', 'text-center py-10 text-slate-400 text-sm', '暂无故障记录'));
+            list.appendChild(h('div', 'text-center py-10 text-slate-400 text-sm', t('dashboard.noFaults')));
           }
           r.data.forEach(f => {
             const el = h('div', 'border border-slate-200 dark:border-slate-800 rounded-xl p-3.5');
             const top = h('div', 'flex items-center gap-2 flex-wrap');
             top.appendChild(h('span', 'w-2 h-2 rounded-full ' + (f.fault_status === 3 ? 'bg-red-500' : 'bg-amber-500')));
-            top.appendChild(h('span', 'font-medium text-sm', esc(f.site_name || ('站点#' + f.site_id))));
+            top.appendChild(h('span', 'font-medium text-sm', esc(f.site_name || (t('faultLogs.sitePrefix') + f.site_id))));
             top.appendChild(h('span', 'px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500',
-              f.fault_status === 3 ? '离线' : '卡顿'));
+              f.fault_status === 3 ? t('status.down') : t('status.slow')));
             if (f.error_code) top.appendChild(h('code', 'px-2 py-0.5 rounded text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', esc(f.error_code)));
-            top.appendChild(h('span', 'text-xs text-slate-400 ml-auto tabular', esc(f.started_at) + (f.ended_at ? ' → ' + esc(f.ended_at) : ' · 进行中')));
+            top.appendChild(h('span', 'text-xs text-slate-400 ml-auto tabular', esc(f.started_at) + (f.ended_at ? ' → ' + esc(f.ended_at) : ' · ' + t('site.ongoing'))));
             el.appendChild(top);
             if (f.error_msg) el.appendChild(h('div', 'mt-2 text-xs text-slate-500', esc(f.error_msg)));
             // 完整错误解读
             if (f.explain) {
               const ex = h('div', 'mt-2 text-xs bg-slate-50 dark:bg-slate-800 rounded-lg p-3 space-y-1');
-              ex.innerHTML = '<div><span class="text-slate-400">名称：</span><span class="font-medium">' + esc(f.explain.name) + '</span></div>' +
-                '<div><span class="text-slate-400">成因：</span>' + esc(f.explain.cause) + '</div>' +
-                (f.explain.causes.length ? '<div><span class="text-slate-400">诱因：</span>' + esc(f.explain.causes.join('、')) + '</div>' : '') +
-                '<div><span class="text-slate-400">建议：</span>' + esc(f.explain.tips) + '</div>' +
-                '<div><span class="text-slate-400">影响等级：</span>' + (f.explain.level === 3 ? '高' : f.explain.level === 2 ? '中' : '低') + '</div>';
+              ex.innerHTML = '<div><span class="text-slate-400">' + esc(t('faultLogs.explainName')) + '</span><span class="font-medium">' + esc(f.explain.name) + '</span></div>' +
+                '<div><span class="text-slate-400">' + esc(t('faultLogs.explainCause')) + '</span>' + esc(f.explain.cause) + '</div>' +
+                ((f.explain.causes && f.explain.causes.length) ? '<div><span class="text-slate-400">' + esc(t('faultLogs.explainTriggers')) + '</span>' + esc(f.explain.causes.join('、')) + '</div>' : '') +
+                '<div><span class="text-slate-400">' + esc(t('faultLogs.explainTips')) + '</span>' + esc(f.explain.tips) + '</div>' +
+                '<div><span class="text-slate-400">' + esc(t('faultLogs.explainLevel')) + '</span>' + esc(f.explain.level === 3 ? t('faultLogs.levelHigh') : f.explain.level === 2 ? t('faultLogs.levelMid') : t('faultLogs.levelLow')) + '</div>';
               el.appendChild(ex);
             }
             list.appendChild(el);
@@ -100,13 +100,13 @@
       function renderPager() {
         const pages = Math.max(1, Math.ceil(total / 15));
         pager.innerHTML = '';
-        pager.appendChild(h('span', 'text-xs text-slate-400', '共 ' + total + ' 条 · 第 ' + pageNum + ' / ' + pages + ' 页'));
+        pager.appendChild(h('span', 'text-xs text-slate-400', esc(t('faultLogs.pager').replace('{total}', total).replace('{page}', pageNum).replace('{pages}', pages))));
         const btns = h('div', 'flex gap-2');
-        const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', '上一页');
+        const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', t('common.prevPage'));
         prev.disabled = pageNum <= 1;
         prev.addEventListener('click', () => { pageNum--; load(); });
         btns.appendChild(prev);
-        const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', '下一页');
+        const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', t('common.nextPage'));
         next.disabled = pageNum >= pages;
         next.addEventListener('click', () => { pageNum++; load(); });
         btns.appendChild(next);
@@ -114,6 +114,8 @@
       }
 
       btn.addEventListener('click', () => { pageNum = 1; load(); });
+      // 切换语言后重新加载
+      document.addEventListener('ws-langchange', () => { load(); });
       load();
     })();
   })();

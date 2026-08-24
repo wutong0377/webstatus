@@ -48,6 +48,17 @@ html.dark ::-webkit-scrollbar-thumb { background: #475569; }
 /* 数字信息可读性优先 */
 .tabular { font-variant-numeric: tabular-nums; }
 
+/* 动效克制：尊重系统"减弱动态效果"偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse { animation: none; }
+  .card-hover { transition: none; }
+  .transition-colors { transition: none !important; }
+  .transition-all { transition: none !important; }
+}
+
+/* 站点卡片等高：网格项默认 stretch，卡片内部用 flex 撑满 */
+.grid > .h-full { min-height: 100%; }
+
 /* 安装向导步骤指示 */
 .step-indicator { display: flex; align-items: center; }
 .step-dot { width: 30px; height: 30px; border-radius: 9999px; display: flex;

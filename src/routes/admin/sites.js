@@ -14,6 +14,51 @@ const { validateMonitorDomain } = require('../../utils/net');
 
 const MAX_SITES = 10;
 
+/** 解析站点配置字段（v1.1 含探测/告警/证书/域名/OCSP 开关） */
+function parseSiteFields(body) {
+  return {
+    name: requiredStr(body.name, 100, '站点名称'),
+    domain: validateMonitorDomain(body.domain),
+    description: str(body.description, 500, '站点简介'),
+    seoTitle: str(body.seo_title, 200, 'SEO 标题'),
+    seoDesc: str(body.seo_desc, 500, 'SEO 描述'),
+    seoKeywords: str(body.seo_keywords, 500, 'SEO 关键词'),
+    iconUrl: body.icon_url ? url(body.icon_url, '站点图标') : '',
+    enabled: bool(body.enabled),
+    maintenance: bool(body.maintenance),
+    maintenanceNote: str(body.maintenance_note, 500, '维修备注'),
+    sort: int(body.sort, { min: 0, max: 9999, name: '排序' }),
+    alertEnabled: bool(body.alert_enabled),
+    expectedStatus: body.expected_status ? int(body.expected_status, { min: 100, max: 599, name: '期望状态码' }) : null,
+    checkDns: bool(body.check_dns),
+    checkCert: bool(body.check_cert),
+    certWarnDays: int(body.cert_warn_days, { min: 1, max: 365, def: 30, name: '证书预警天数' }),
+    checkTcp: bool(body.check_tcp),
+    tcpPort: body.tcp_port ? int(body.tcp_port, { min: 1, max: 65535, name: 'TCP端口' }) : null,
+    monitorMode: ['http', 'tcp', 'icmp'].includes(body.monitor_mode) ? body.monitor_mode : 'http',
+    checkDomain: bool(body.check_domain),
+    domainWarnDays: int(body.domain_warn_days, { min: 7, max: 365, def: 90, name: '域名预警天数' }),
+    checkOcsp: bool(body.check_ocsp)
+  };
+}
+
+/** 站点表列白名单（固定字符串，无注入风险） */
+const SITE_COLS = [
+  'name', 'domain', 'description', 'seo_title', 'seo_desc', 'seo_keywords',
+  'icon_url', 'enabled', 'maintenance', 'maintenance_note', 'sort',
+  'alert_enabled', 'expected_status', 'check_dns', 'check_cert', 'cert_warn_days',
+  'check_tcp', 'tcp_port', 'monitor_mode', 'check_domain', 'domain_warn_days', 'check_ocsp'
+];
+/** 与 SITE_COLS 顺序一致的值数组 */
+function siteValues(f) {
+  return [
+    f.name, f.domain, f.description, f.seoTitle, f.seoDesc, f.seoKeywords,
+    f.iconUrl, f.enabled ? 1 : 0, f.maintenance ? 1 : 0, f.maintenanceNote, f.sort,
+    f.alertEnabled ? 1 : 0, f.expectedStatus, f.checkDns ? 1 : 0, f.checkCert ? 1 : 0, f.certWarnDays,
+    f.checkTcp ? 1 : 0, f.tcpPort, f.monitorMode, f.checkDomain ? 1 : 0, f.domainWarnDays, f.checkOcsp ? 1 : 0
+  ];
+}
+
 /** 站点/公告变更后失效公开缓存 */
 function invalidateCache() {
   cache.delPrefix('pub_status');
@@ -45,18 +90,7 @@ router.get('/:id(\\d+)', async (req, res, next) => {
 /* ---------------- 新增站点 ---------------- */
 router.post('/create', async (req, res, next) => {
   try {
-    const body = req.body || {};
-    const name = requiredStr(body.name, 100, '站点名称');
-    const domain = validateMonitorDomain(body.domain);
-    const description = str(body.description, 500, '站点简介');
-    const seoTitle = str(body.seo_title, 200, 'SEO 标题');
-    const seoDesc = str(body.seo_desc, 500, 'SEO 描述');
-    const seoKeywords = str(body.seo_keywords, 500, 'SEO 关键词');
-    const iconUrl = body.icon_url ? url(body.icon_url, '站点图标') : '';
-    const enabled = bool(body.enabled);
-    const maintenance = bool(body.maintenance);
-    const maintenanceNote = str(body.maintenance_note, 500, '维修备注');
-    const sort = int(body.sort, { min: 0, max: 9999, name: '排序' });
+    const f = parseSiteFields(req.body || {});
 
     const cnt = await queryOne('SELECT COUNT(*) AS c FROM sites');
     if (Number(cnt.c) >= MAX_SITES) {
@@ -64,8 +98,8 @@ router.post('/create', async (req, res, next) => {
     }
 
     await query(
-      'INSERT INTO sites (name, domain, description, seo_title, seo_desc, seo_keywords, icon_url, enabled, maintenance, maintenance_note, sort) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-      [name, domain, description, seoTitle, seoDesc, seoKeywords, iconUrl, enabled ? 1 : 0, maintenance ? 1 : 0, maintenanceNote, sort]
+      'INSERT INTO sites (' + SITE_COLS.join(', ') + ') VALUES (' + SITE_COLS.map(() => '?').join(', ') + ')',
+      siteValues(f)
     );
     invalidateCache();
     res.json({ code: 0, message: '站点添加成功' });
@@ -79,23 +113,9 @@ router.post('/:id(\\d+)/update', async (req, res, next) => {
     const exists = await queryOne('SELECT id FROM sites WHERE id = ?', [id]);
     if (!exists) return res.status(404).json({ code: 404, message: '站点不存在' });
 
-    const body = req.body || {};
-    const name = requiredStr(body.name, 100, '站点名称');
-    const domain = validateMonitorDomain(body.domain);
-    const description = str(body.description, 500, '站点简介');
-    const seoTitle = str(body.seo_title, 200, 'SEO 标题');
-    const seoDesc = str(body.seo_desc, 500, 'SEO 描述');
-    const seoKeywords = str(body.seo_keywords, 500, 'SEO 关键词');
-    const iconUrl = body.icon_url ? url(body.icon_url, '站点图标') : '';
-    const enabled = bool(body.enabled);
-    const maintenance = bool(body.maintenance);
-    const maintenanceNote = str(body.maintenance_note, 500, '维修备注');
-    const sort = int(body.sort, { min: 0, max: 9999, name: '排序' });
-
-    await query(
-      'UPDATE sites SET name=?, domain=?, description=?, seo_title=?, seo_desc=?, seo_keywords=?, icon_url=?, enabled=?, maintenance=?, maintenance_note=?, sort=? WHERE id=?',
-      [name, domain, description, seoTitle, seoDesc, seoKeywords, iconUrl, enabled ? 1 : 0, maintenance ? 1 : 0, maintenanceNote, sort, id]
-    );
+    const f = parseSiteFields(req.body || {});
+    const sets = SITE_COLS.map(c => c + ' = ?').join(', ');
+    await query('UPDATE sites SET ' + sets + ' WHERE id = ?', [...siteValues(f), id]);
     invalidateCache();
     res.json({ code: 0, message: '站点已更新' });
   } catch (e) { next(e); }

@@ -59,6 +59,7 @@ const WebStatus = (() => {
   }
 
   /* ---------------- 主题 ---------------- */
+  let lang = localStorage.getItem('ws_lang') === 'en' ? 'en' : 'zh';
   let dark = localStorage.getItem('ws_dark') === '1';
 
   function applyTheme() {
@@ -133,6 +134,305 @@ const WebStatus = (() => {
     return (n / (1024 * 1024)).toFixed(2) + ' MB';
   }
 
+  /* ---------------- i18n（中 / English） ---------------- */
+  // 语言字典：key -> { zh, en }。语言存 localStorage('ws_lang')，默认 zh。
+  const I18N = {
+    'lang.switch': { zh: 'EN', en: '中' },
+    'app.subtitle': { zh: '网站状态监控', en: 'Website Status Monitor' },
+    'common.loading': { zh: '加载中...', en: 'Loading...' },
+    'common.loadFailed': { zh: '加载失败', en: 'Failed to load' },
+    'common.save': { zh: '保存', en: 'Save' },
+    'common.saved': { zh: '已保存', en: 'Saved' },
+    'common.cancel': { zh: '取消', en: 'Cancel' },
+    'common.delete': { zh: '删除', en: 'Delete' },
+    'common.deleted': { zh: '已删除', en: 'Deleted' },
+    'common.edit': { zh: '编辑', en: 'Edit' },
+    'common.detail': { zh: '详情', en: 'Details' },
+    'common.search': { zh: '查询', en: 'Search' },
+    'common.empty': { zh: '暂无记录', en: 'No records' },
+    'common.prevPage': { zh: '上一页', en: 'Prev' },
+    'common.nextPage': { zh: '下一页', en: 'Next' },
+    'common.success': { zh: '成功', en: 'Success' },
+    'common.failed': { zh: '失败', en: 'Failed' },
+    'common.saving': { zh: '保存中...', en: 'Saving...' },
+
+    'status.up': { zh: '正常', en: 'Up' },
+    'status.slow': { zh: '卡顿', en: 'Slow' },
+    'status.down': { zh: '离线', en: 'Down' },
+    'status.maintenance': { zh: '维修', en: 'Maintenance' },
+    'status.unknown': { zh: '未检测', en: 'Unknown' },
+
+    'nav.admin': { zh: '管理后台', en: 'Admin' },
+    'nav.dashboard': { zh: '仪表盘', en: 'Dashboard' },
+    'nav.sites': { zh: '站点管理', en: 'Sites' },
+    'nav.notices': { zh: '公告管理', en: 'Notices' },
+    'nav.mail': { zh: '邮件告警设置', en: 'Mail Alerts' },
+    'nav.mailLogs': { zh: '邮件发送日志', en: 'Mail Logs' },
+    'nav.faultLogs': { zh: '故障日志', en: 'Fault Logs' },
+    'nav.settings': { zh: '系统设置', en: 'Settings' },
+    'nav.accounts': { zh: '账号管理', en: 'Accounts' },
+    'nav.sessions': { zh: '会话管理', en: 'Sessions' },
+    'nav.report': { zh: '报表中心', en: 'Reports' },
+    'nav.alerts': { zh: '告警设置', en: 'Alerts' },
+    'nav.front': { zh: '查看前台', en: 'View Front' },
+    'admin.console': { zh: '运维控制台', en: 'Console' },
+    'logout': { zh: '退出', en: 'Logout' },
+
+    'home.cardView': { zh: '卡片', en: 'Cards' },
+    'home.listView': { zh: '列表', en: 'List' },
+    'home.empty': { zh: '暂无监控站点', en: 'No monitored sites yet' },
+    'home.footer': { zh: '开源自托管网站状态监控系统', en: 'Open-source self-hosted status monitoring' },
+    'home.metric.delay': { zh: '延迟', en: 'Delay' },
+    'home.metric.code': { zh: '状态码', en: 'Status' },
+    'home.metric.checked': { zh: '最近检测', en: 'Checked' },
+    'home.maintenance': { zh: '维修说明：', en: 'Maintenance: ' },
+    'home.probeError': { zh: '探测异常', en: 'Probe error' },
+
+    'site.title': { zh: '站点详情', en: 'Site Details' },
+    'site.chartTitle': { zh: '延迟曲线', en: 'Latency' },
+    'site.exportCsv': { zh: '导出 CSV', en: 'Export CSV' },
+    'site.chartHint': { zh: '响应耗时（ms），颜色对应状态', en: 'Response time (ms), colored by status' },
+    'site.timelineTitle': { zh: '状态时间线', en: 'Status Timeline' },
+    'site.timelineEmpty': { zh: '该时间段内暂无状态记录', en: 'No status records in this period' },
+    'site.faultTitle': { zh: '故障记录', en: 'Fault History' },
+    'site.faultEmpty': { zh: '暂无历史故障', en: 'No historical faults' },
+    'site.chartLabel': { zh: '响应耗时(ms)', en: 'Response time (ms)' },
+    'site.tooltipDelay': { zh: '耗时', en: 'Latency' },
+    'site.ongoing': { zh: '进行中', en: 'ongoing' },
+    'site.duration': { zh: '持续', en: 'for' },
+    'site.metric.http': { zh: 'HTTP', en: 'HTTP' },
+    'site.range.hour': { zh: '1小时', en: '1h' },
+    'site.range.day': { zh: '24小时', en: '24h' },
+    'site.range.week': { zh: '7天', en: '7d' },
+    'site.range.month': { zh: '30天', en: '30d' },
+    'dur.day': { zh: '天', en: 'd' },
+    'dur.hour': { zh: '时', en: 'h' },
+    'dur.min': { zh: '分', en: 'm' },
+    'dur.sec': { zh: '秒', en: 's' },
+
+    'login.title': { zh: 'WebStatus 管理后台', en: 'WebStatus Admin' },
+    'login.subtitle': { zh: '网站状态监控系统', en: 'Website Status Monitoring' },
+    'login.username': { zh: '用户名', en: 'Username' },
+    'login.password': { zh: '密码', en: 'Password' },
+    'login.submit': { zh: '登录', en: 'Sign in' },
+    'login.loggingIn': { zh: '登录中...', en: 'Signing in...' },
+    'login.failed': { zh: '登录失败', en: 'Login failed' },
+    'login.back': { zh: '← 返回状态面板', en: '← Back to status panel' },
+
+    'install.wizard': { zh: '安装向导', en: 'Installation Wizard' },
+    'install.checking': { zh: '正在检查运行环境...', en: 'Checking runtime...' },
+    'install.step1': { zh: '环境检查', en: 'Environment' },
+    'install.step2': { zh: '数据库', en: 'Database' },
+    'install.step3': { zh: '模式选择', en: 'Mode' },
+    'install.step4': { zh: '管理员', en: 'Admin' },
+    'install.step5': { zh: '系统参数', en: 'Settings' },
+    'install.step6': { zh: 'SMTP', en: 'SMTP' },
+    'install.step7': { zh: '完成', en: 'Done' },
+    'install.next': { zh: '通过，下一步', en: 'Pass, next' },
+    'install.retry': { zh: '环境异常，请先修复（仍可重试检查）', en: 'Fix issues, then retry' },
+    'install.testDb': { zh: '测试连接并继续', en: 'Test & continue' },
+    'install.testingDb': { zh: '连接测试中...', en: 'Testing...' },
+    'install.chooseFresh': { zh: '选择全新初始化', en: 'Fresh init' },
+    'install.chooseRestore': { zh: '选择恢复备份', en: 'Restore backup' },
+    'install.createAdmin': { zh: '创建账号，下一步', en: 'Create account & next' },
+    'install.saveParams': { zh: '保存参数，下一步', en: 'Save & next' },
+    'install.saveSmtp': { zh: '保存并继续', en: 'Save & continue' },
+    'install.skipSmtp': { zh: '跳过此步', en: 'Skip' },
+    'install.back': { zh: '上一步', en: 'Back' },
+    'install.finish': { zh: '完成安装', en: 'Finish' },
+    'install.finishing': { zh: '正在生成配置...', en: 'Generating config...' },
+    'install.dbConfig': { zh: '数据库连接配置', en: 'Database Connection' },
+    'install.modeInit': { zh: '数据库初始化模式', en: 'Initialization Mode' },
+    'install.adminCreate': { zh: '创建管理员账号', en: 'Create Admin Account' },
+    'install.sysParams': { zh: '系统参数配置', en: 'System Parameters' },
+    'install.smtpConfig': { zh: 'SMTP 邮件配置（可选）', en: 'SMTP Email Config (Optional)' },
+    'install.finishTitle': { zh: '即将完成安装', en: 'Almost Done' },
+    'install.complete': { zh: '安装完成', en: 'Installation Complete' },
+    'install.modeA': { zh: '模式 A：全新初始化', en: 'Mode A: Fresh Init' },
+    'install.modeB': { zh: '模式 B：上传备份恢复', en: 'Mode B: Restore Backup' },
+    'install.modeBTitle': { zh: '模式 B：上传 SQL 备份恢复', en: 'Mode B: Upload SQL Backup' },
+
+    'dashboard.total': { zh: '站点总数', en: 'Total Sites' },
+    'dashboard.svcRunning': { zh: '巡检任务运行中', en: 'Monitor running' },
+    'dashboard.svcStopped': { zh: '巡检任务已停止', en: 'Monitor stopped' },
+    'dashboard.lastRun': { zh: '上次巡检：', en: 'Last run: ' },
+    'dashboard.neverRun': { zh: '尚未运行', en: 'never' },
+    'dashboard.recentFaults': { zh: '最近故障', en: 'Recent Faults' },
+    'dashboard.noFaults': { zh: '暂无故障记录', en: 'No fault records' },
+    'dashboard.recentMails': { zh: '最近邮件发送', en: 'Recent Mail Sends' },
+    'dashboard.noMails': { zh: '暂无邮件记录', en: 'No mail records' },
+    'dashboard.round': { zh: '本轮 {total} 站 · 正常 {up} · 卡顿 {slow} · 离线 {down} · 维修 {maintenance}', en: 'Round: {total} sites · up {up} · slow {slow} · down {down} · maintenance {maintenance}' },
+    'mailType.alert': { zh: '告警', en: 'Alert' },
+    'mailType.recover': { zh: '恢复', en: 'Recover' },
+    'mailType.test': { zh: '测试', en: 'Test' },
+
+    'sites.add': { zh: '新增站点', en: 'Add Site' },
+    'sites.edit': { zh: '编辑站点', en: 'Edit Site' },
+    'sites.empty': { zh: '暂无站点，点击右上角添加', en: 'No sites — click the top-right button to add' },
+    'sites.disabled': { zh: '监控已停用', en: 'Monitoring disabled' },
+    'sites.enabled': { zh: '启用监控', en: 'Monitoring enabled' },
+    'sites.maintenanceMode': { zh: '维修模式', en: 'Maintenance mode' },
+    'sites.maintenanceNote': { zh: '维修备注', en: 'Maintenance note' },
+    'sites.field.name': { zh: '站点名称 *', en: 'Site name *' },
+    'sites.field.domain': { zh: '站点域名/URL *', en: 'Site domain / URL *' },
+    'sites.field.desc': { zh: '站点简介', en: 'Description' },
+    'sites.field.icon': { zh: '站点图标 URL（外部）', en: 'Icon URL (external)' },
+    'sites.field.sort': { zh: '排序', en: 'Sort order' },
+    'sites.field.seoTitle': { zh: 'SEO 标题', en: 'SEO title' },
+    'sites.field.seoDesc': { zh: 'SEO Meta-Description', en: 'SEO meta description' },
+    'sites.field.seoKw': { zh: 'SEO Meta-Keywords', en: 'SEO meta keywords' },
+    'sites.confirmDelete': { zh: '确定删除站点「{name}」吗？相关历史数据将一并删除。', en: 'Delete site "{name}"? Its history will also be deleted.' },
+
+    'notices.publish': { zh: '发布公告', en: 'Publish Notice' },
+    'notices.edit': { zh: '编辑公告', en: 'Edit Notice' },
+    'notices.empty': { zh: '暂无公告', en: 'No notices' },
+    'notices.pinned': { zh: '置顶', en: 'Pinned' },
+    'notices.field.title': { zh: '公告标题 *', en: 'Notice title *' },
+    'notices.field.content': { zh: '公告内容（支持简单 HTML）', en: 'Content (simple HTML supported)' },
+    'notices.field.sort': { zh: '排序', en: 'Sort order' },
+    'notices.confirmDelete': { zh: '确定删除公告「{title}」吗？', en: 'Delete notice "{title}"?' },
+
+    'mail.tab.smtp': { zh: 'SMTP 配置', en: 'SMTP' },
+    'mail.tab.recipients': { zh: '接收邮箱', en: 'Recipients' },
+    'mail.tab.templates': { zh: '邮件模板', en: 'Templates' },
+    'mail.toggleTitle': { zh: '全局邮件告警总开关', en: 'Global mail alert switch' },
+    'mail.toggleDesc': { zh: '关闭后不发送任何告警 / 恢复通知邮件', en: 'When off, no alert or recovery emails are sent' },
+    'mail.saveConfig': { zh: '保存配置', en: 'Save' },
+    'mail.sendTest': { zh: '发送测试邮件', en: 'Send test mail' },
+    'mail.testTo': { zh: '测试收件邮箱（留空用发件邮箱）', en: 'Test recipient (empty = from)' },
+    'mail.addEmail': { zh: '添加邮箱', en: 'Add' },
+    'mail.noRecipients': { zh: '暂无接收邮箱', en: 'No recipients' },
+    'mail.enableSmtp': { zh: '启用 SMTP', en: 'Enable SMTP' },
+    'mail.saveTemplate': { zh: '保存模板', en: 'Save' },
+    'mail.resetTemplate': { zh: '重置为默认', en: 'Reset' },
+    'mail.subject': { zh: '邮件主题', en: 'Subject' },
+    'mail.htmlBody': { zh: '邮件 HTML 正文', en: 'HTML body' },
+    'mail.tplVars': { zh: '可用模板变量：', en: 'Available variables:' },
+    'mail.tplAlert': { zh: '告警模板', en: 'Alert template' },
+    'mail.tplRecover': { zh: '恢复通知模板', en: 'Recovery template' },
+    'mail.smtpNote': { zh: 'SMTP 敏感凭证仅保存于 config.json，数据库中不存储明文密码。', en: 'Sensitive SMTP credentials live only in config.json, never in the DB.' },
+    'mail.field.host': { zh: 'SMTP 服务器', en: 'SMTP server' },
+    'mail.field.port': { zh: '端口', en: 'Port' },
+    'mail.field.user': { zh: '发件账号', en: 'From account' },
+    'mail.field.pass': { zh: '发件密码 / 授权码', en: 'Password / app key' },
+    'mail.field.fromName': { zh: '发件人名称', en: 'From name' },
+    'mail.field.fromEmail': { zh: '发件邮箱', en: 'From email' },
+
+    'mailLogs.th.time': { zh: '时间', en: 'Time' },
+    'mailLogs.th.to': { zh: '收件邮箱', en: 'Recipient' },
+    'mailLogs.th.type': { zh: '类型', en: 'Type' },
+    'mailLogs.th.status': { zh: '状态', en: 'Status' },
+    'mailLogs.th.error': { zh: '失败原因', en: 'Error' },
+    'mailLogs.fType': { zh: '全部类型', en: 'All types' },
+    'mailLogs.fStatus': { zh: '全部状态', en: 'All statuses' },
+    'mailLogs.fKeyword': { zh: '搜索收件邮箱', en: 'Search recipient' },
+    'mailLogs.lblType': { zh: '类型', en: 'Type' },
+    'mailLogs.lblStatus': { zh: '状态', en: 'Status' },
+    'mailLogs.lblKeyword': { zh: '关键字', en: 'Keyword' },
+    'mailLogs.pager': { zh: '共 {total} 条 · 第 {page} / {pages} 页', en: '{total} records · page {page} / {pages}' },
+
+    'faultLogs.allSites': { zh: '全部站点', en: 'All sites' },
+    'faultLogs.allStatus': { zh: '全部状态', en: 'All statuses' },
+    'faultLogs.codePlaceholder': { zh: '错误码（如 HTTP_503）', en: 'Error code (e.g. HTTP_503)' },
+    'faultLogs.lblSite': { zh: '站点', en: 'Site' },
+    'faultLogs.lblStatus': { zh: '状态', en: 'Status' },
+    'faultLogs.lblCode': { zh: '错误码', en: 'Error code' },
+    'faultLogs.sitePrefix': { zh: '站点#', en: 'Site #' },
+    'faultLogs.explainName': { zh: '名称：', en: 'Name: ' },
+    'faultLogs.explainCause': { zh: '成因：', en: 'Cause: ' },
+    'faultLogs.explainTriggers': { zh: '诱因：', en: 'Triggers: ' },
+    'faultLogs.explainTips': { zh: '建议：', en: 'Tips: ' },
+    'faultLogs.explainLevel': { zh: '影响等级：', en: 'Severity: ' },
+    'faultLogs.levelHigh': { zh: '高', en: 'High' },
+    'faultLogs.levelMid': { zh: '中', en: 'Mid' },
+    'faultLogs.levelLow': { zh: '低', en: 'Low' },
+    'faultLogs.pager': { zh: '共 {total} 条 · 第 {page} / {pages} 页', en: '{total} records · page {page} / {pages}' },
+
+    'settings.params': { zh: '业务参数', en: 'Monitor Parameters' },
+    'settings.saveParams': { zh: '保存业务参数', en: 'Save parameters' },
+    'settings.ops': { zh: '运维操作', en: 'Operations' },
+    'settings.service': { zh: '服务运行状态', en: 'Service Status' },
+    'settings.lastRunTime': { zh: '上次巡检时间：', en: 'Last run: ' },
+    'settings.svcStopped': { zh: '巡检任务未运行', en: 'Monitor not running' },
+    'settings.modeNote': { zh: '巡检模式：仅后端定时任务，页面访问不触发探测', en: 'Probing runs only in the backend scheduler.' },
+    'settings.roundSummary': { zh: '最近一轮：站点 {total} · 正常 {up} · 卡顿 {slow} · 离线 {down} · 维修 {maintenance}', en: 'Last round: {total} sites · up {up} · slow {slow} · down {down} · maintenance {maintenance}' },
+    'settings.param.slow': { zh: '卡顿延迟阈值(ms)', en: 'Slow threshold (ms)' },
+    'settings.param.check': { zh: '巡检间隔(秒)', en: 'Check interval (s)' },
+    'settings.param.streak': { zh: '抖动抑制·连续异常次数', en: 'Alert streak (N)' },
+    'settings.param.cooldown': { zh: '邮件告警冷却(秒)', en: 'Alert cooldown (s)' },
+    'settings.param.history': { zh: '历史数据保留(天)', en: 'History retention (days)' },
+    'settings.param.logs': { zh: '日志保留(天)', en: 'Log retention (days)' },
+    'settings.param.cache': { zh: '公开缓存 TTL(秒)', en: 'Public cache TTL (s)' },
+    'settings.param.refresh': { zh: '前端刷新间隔(秒)', en: 'Frontend refresh (s)' },
+    'settings.param.upload': { zh: 'SQL 备份上传上限(MB)', en: 'Backup upload limit (MB)' },
+    'settings.op.export': { zh: '导出数据库备份', en: 'Export backup' },
+    'settings.op.exportDesc': { zh: '下载完整 .sql 备份文件，可用于安装向导「模式 B」恢复', en: 'Download a full .sql backup for install wizard Mode B' },
+    'settings.op.run': { zh: '手动触发完整巡检', en: 'Run monitor now' },
+    'settings.op.runDesc': { zh: '立即对所有启用站点执行一轮探测', en: 'Run one probe round for all enabled sites' },
+    'settings.op.clearHistory': { zh: '清空监控历史', en: 'Clear history' },
+    'settings.op.clearHistoryDesc': { zh: '删除全部状态历史数据（不可恢复）', en: 'Delete all status history (irreversible)' },
+    'settings.op.clearFaults': { zh: '清空故障日志', en: 'Clear fault logs' },
+    'settings.op.clearFaultsDesc': { zh: '删除全部故障记录（不可恢复）', en: 'Delete all fault records (irreversible)' },
+    'settings.op.clearMails': { zh: '清空邮件发送日志', en: 'Clear mail logs' },
+    'settings.op.clearMailsDesc': { zh: '删除全部邮件发送记录（不可恢复）', en: 'Delete all mail records (irreversible)' },
+    'settings.confirm.run': { zh: '确定立即执行一轮完整巡检？', en: 'Run a full monitor round now?' },
+    'settings.confirm.clearHistory': { zh: '确定清空全部监控历史数据？此操作不可恢复！', en: 'Clear all monitoring history? This cannot be undone!' },
+    'settings.confirm.clearFaults': { zh: '确定清空全部故障日志？此操作不可恢复！', en: 'Clear all fault logs? Cannot be undone!' },
+    'settings.confirm.clearMails': { zh: '确定清空全部邮件发送日志？此操作不可恢复！', en: 'Clear all mail logs? Cannot be undone!' }
+  };
+
+  function t(key) {
+    const e = I18N[key];
+    if (!e) return key;
+    return lang === 'en' ? (e.en !== undefined ? e.en : e.zh) : e.zh;
+  }
+
+  function applyI18n(root) {
+    root = root || document;
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll('[data-i18n]').forEach(el => {
+      const k = el.getAttribute('data-i18n');
+      if (k) el.textContent = t(k);
+    });
+    root.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const k = el.getAttribute('data-i18n-placeholder');
+      if (k) el.setAttribute('placeholder', t(k));
+    });
+  }
+
+  /** 切换语言并重渲染当前页（data-i18n 静态文案 + 广播 ws-langchange 供页面重渲染动态内容） */
+  function setLang(l) {
+    lang = l === 'en' ? 'en' : 'zh';
+    localStorage.setItem('ws_lang', lang);
+    applyI18n(document);
+    document.dispatchEvent(new CustomEvent('ws-langchange'));
+  }
+
+  const STATUS_KEY = { 1: 'status.up', 2: 'status.slow', 3: 'status.down', 4: 'status.maintenance' };
+  /** 状态文本（i18n 化） */
+  function tStatus(status) {
+    return t(STATUS_KEY[status] || 'status.unknown');
+  }
+
+  /** 语言切换按钮（显示目标语言） */
+  function langBtn() {
+    const b = h('button', 'px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800');
+    b.id = 'ws-lang-btn';
+    function refresh() {
+      b.textContent = t('lang.switch');
+      b.title = lang === 'zh' ? 'Switch to English' : '切换到中文';
+    }
+    refresh();
+    b.addEventListener('click', () => setLang(lang === 'zh' ? 'en' : 'zh'));
+    document.addEventListener('ws-langchange', refresh);
+    return b;
+  }
+
+  /** skeleton 加载占位块 */
+  function skeleton(cls) {
+    return h('div', 'animate-pulse bg-slate-200 dark:bg-slate-800 ' + (cls || 'rounded-lg'));
+  }
+
   /* ---------------- Toast ---------------- */
   let toastTimer = null;
   function toast(msg, type) {
@@ -152,15 +452,42 @@ const WebStatus = (() => {
     setTimeout(() => { t.remove(); }, 3000);
   }
 
+  /* ---------------- 版权保护（隐蔽校验，改动即停止渲染） ---------------- */
+  const CP_STR = '© Wutong|梧桐|3363047365|github.com/wutong0377';
+  const CP_SUM = 57172;
+  function cpSum(s) { let t = 0; for (let i = 0; i < s.length; i++) t = (t + s.charCodeAt(i)) >>> 0; return t; }
+  function copyrightOk() { return cpSum(CP_STR) === CP_SUM; }
+  const AUTHOR = '梧桐 Wutong';            // 梧桐 Wutong
+  const GITHUB = 'https://github.com/wutong0377';
+  const QQ = '3363047365';
+  /**
+   * 渲染版权页脚；版权数据被改动则停止渲染页面内容
+   * @param {HTMLElement} [container] 可选容器，缺省查找 #ws-copyright
+   */
+  function renderCopyright(container) {
+    if (!copyrightOk()) {
+      document.body.innerHTML = '<div style="padding:60px;text-align:center;font-family:sans-serif;color:#64748b"><p>版权信息异常，服务已停止运行。</p></div>';
+      throw new Error('copyright integrity check failed');
+    }
+    const host = container || document.getElementById('ws-copyright');
+    if (host) {
+      host.innerHTML = '<a href="' + GITHUB + '" target="_blank" rel="noopener" class="hover:underline">©️ ' + AUTHOR + '</a><span class="mx-1">·</span>QQ ' + QQ;
+    }
+  }
+
   /* ---------------- 后台侧边栏 ---------------- */
   const MENU = [
-    { path: '/admin/dashboard', label: '仪表盘', icon: 'grid' },
-    { path: '/admin/sites', label: '站点管理', icon: 'globe' },
-    { path: '/admin/notices', label: '公告管理', icon: 'megaphone' },
-    { path: '/admin/mail', label: '邮件告警设置', icon: 'mail' },
-    { path: '/admin/mail-logs', label: '邮件发送日志', icon: 'fileText' },
-    { path: '/admin/fault-logs', label: '故障日志', icon: 'alertTriangle' },
-    { path: '/admin/settings', label: '系统设置', icon: 'gear' }
+    { path: '/admin/dashboard', label: '仪表盘', key: 'nav.dashboard', icon: 'grid' },
+    { path: '/admin/sites', label: '站点管理', key: 'nav.sites', icon: 'globe' },
+    { path: '/admin/notices', label: '公告管理', key: 'nav.notices', icon: 'megaphone' },
+    { path: '/admin/mail', label: '邮件告警设置', key: 'nav.mail', icon: 'mail' },
+    { path: '/admin/mail-logs', label: '邮件发送日志', key: 'nav.mailLogs', icon: 'fileText' },
+    { path: '/admin/fault-logs', label: '故障日志', key: 'nav.faultLogs', icon: 'alertTriangle' },
+    { path: '/admin/settings', label: '系统设置', key: 'nav.settings', icon: 'gear' },
+    { path: '/admin/accounts', label: '账号管理', key: 'nav.accounts', icon: 'shield' },
+    { path: '/admin/sessions', label: '会话管理', key: 'nav.sessions', icon: 'clock' },
+    { path: '/admin/report', label: '报表中心', key: 'nav.report', icon: 'fileText' },
+    { path: '/admin/alerts', label: '告警设置', key: 'nav.alerts', icon: 'alertTriangle' }
   ];
 
   /**
@@ -181,28 +508,33 @@ const WebStatus = (() => {
     if (!shell) return;
 
     // 侧边栏
-    const sidebar = h('aside', 'fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-200');
+    const sidebar = h('aside', 'fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 flex flex-col');
     sidebar.id = 'ws-sidebar';
     const brand = h('div', 'flex items-center gap-2.5 px-5 h-16 border-b border-slate-200 dark:border-slate-800');
-    brand.innerHTML = icon('activity', 'w-6 h-6 text-blue-600') + '<span class="font-semibold text-slate-800 dark:text-slate-100">WebStatus</span><span class="text-xs text-slate-400 ml-1">管理后台</span>';
+    brand.innerHTML = icon('activity', 'w-6 h-6 text-blue-600') + '<span class="font-semibold text-slate-800 dark:text-slate-100">WebStatus</span><span class="text-xs text-slate-400 ml-1" data-i18n="nav.admin">' + t('nav.admin') + '</span>';
     sidebar.appendChild(brand);
 
-    const nav = h('nav', 'py-3 px-3 space-y-1');
+    const nav = h('nav', 'py-3 px-3 space-y-1 flex-1 overflow-y-auto');
     for (const m of MENU) {
       const a = h('a', 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ' +
         (m.path === active
           ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400'
           : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'));
       a.href = m.path;
-      a.innerHTML = icon(m.icon, 'w-5 h-5 flex-shrink-0') + '<span>' + m.label + '</span>';
+      a.innerHTML = icon(m.icon, 'w-5 h-5 flex-shrink-0') + '<span data-i18n="' + m.key + '">' + t(m.key) + '</span>';
       nav.appendChild(a);
     }
     // 前台入口
     const front = h('a', 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800');
     front.href = '/';
-    front.innerHTML = icon('external', 'w-5 h-5 flex-shrink-0') + '<span>查看前台</span>';
+    front.innerHTML = icon('external', 'w-5 h-5 flex-shrink-0') + '<span data-i18n="nav.front">' + t('nav.front') + '</span>';
     nav.appendChild(front);
     sidebar.appendChild(nav);
+    // 侧边栏底部版权（隐蔽校验）
+    const cpBox = h('div', 'px-5 py-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400');
+    cpBox.id = 'ws-copyright';
+    sidebar.appendChild(cpBox);
+    renderCopyright(cpBox);
     shell.appendChild(sidebar);
 
     // 遮罩（移动端）
@@ -217,11 +549,13 @@ const WebStatus = (() => {
     const burger = h('button', 'lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800');
     burger.innerHTML = icon('menu', 'w-6 h-6');
     burger.addEventListener('click', toggleSidebar);
-    left.appendChild(burger);
-    left.appendChild(h('span', 'text-sm text-slate-500 dark:text-slate-400', '运维控制台'));
+    const consoleLabel = h('span', 'text-sm text-slate-500 dark:text-slate-400', t('admin.console'));
+    consoleLabel.setAttribute('data-i18n', 'admin.console');
+    left.appendChild(consoleLabel);
     top.appendChild(left);
 
     const right = h('div', 'flex items-center gap-2');
+    right.appendChild(langBtn());
     const themeBtn = h('button', 'p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800');
     themeBtn.innerHTML = icon('moon', 'w-5 h-5');
     themeBtn.addEventListener('click', () => { toggleTheme(); themeBtn.innerHTML = icon(dark ? 'sun' : 'moon', 'w-5 h-5'); });
@@ -230,7 +564,8 @@ const WebStatus = (() => {
     user.textContent = status.username || '';
     right.appendChild(user);
     const logout = h('button', 'px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 dark:text-slate-300 dark:hover:bg-red-500/10 dark:hover:text-red-400');
-    logout.textContent = '退出';
+    logout.textContent = t('logout');
+    logout.setAttribute('data-i18n', 'logout');
     logout.addEventListener('click', async () => {
       await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
       location.href = '/admin/login';
@@ -247,6 +582,9 @@ const WebStatus = (() => {
     // 主题初始化
     applyTheme();
     themeBtn.innerHTML = icon(dark ? 'sun' : 'moon', 'w-5 h-5');
+
+    // 初始化 i18n 静态文案
+    applyI18n();
 
     return main;
   }
@@ -266,6 +604,8 @@ const WebStatus = (() => {
   return {
     api, setCsrf, esc, h, icon, toast, applyTheme, toggleTheme,
     STATUS_META, fmtTime, fmtDelay, fmtBytes, renderAdminShell,
-    get isDark() { return dark; }
+    t, setLang, applyI18n, tStatus, langBtn, skeleton, renderCopyright,
+    get isDark() { return dark; },
+    get currentLang() { return lang; }
   };
 })();

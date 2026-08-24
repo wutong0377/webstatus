@@ -128,6 +128,30 @@ const MIGRATIONS = [
         KEY idx_mf_site (site_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='手动录入故障事件'`);
     }
+  },
+  {
+    version: 3,
+    name: 'v1.1 补充：域名到期检测与证书吊销检测',
+    up: async (conn) => {
+      // sites 扩展：域名到期 / OCSP 吊销检测开关
+      await conn.query("ALTER TABLE sites ADD COLUMN check_domain TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否域名到期检测'");
+      await conn.query('ALTER TABLE sites ADD COLUMN domain_warn_days INT NOT NULL DEFAULT 90 COMMENT \'域名到期提前预警天数\'');
+      await conn.query("ALTER TABLE sites ADD COLUMN check_ocsp TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否OCSP吊销检测'");
+      // 域名注册到期检测记录表
+      await conn.query(`CREATE TABLE IF NOT EXISTS domain_checks (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        site_id INT UNSIGNED NOT NULL,
+        domain VARCHAR(255) NOT NULL,
+        status TINYINT NOT NULL DEFAULT 1 COMMENT '1正常 2预警 3异常',
+        expiry_date DATETIME NULL,
+        days_left INT NOT NULL DEFAULT 0,
+        registrar VARCHAR(200) NOT NULL DEFAULT '',
+        error_code VARCHAR(50) NOT NULL DEFAULT '',
+        checked_at DATETIME NOT NULL,
+        KEY idx_domain_site (site_id),
+        KEY idx_domain_time (checked_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='域名注册到期检测'`);
+    }
   }
 ];
 

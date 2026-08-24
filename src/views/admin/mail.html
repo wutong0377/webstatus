@@ -13,12 +13,12 @@
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
-    const { api, esc, h, icon, toast } = WebStatus;
+    const { api, esc, h, icon, toast, t } = WebStatus;
     const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
     const TABS = [
-      { key: 'smtp', label: 'SMTP 配置' },
-      { key: 'recipients', label: '接收邮箱' },
-      { key: 'templates', label: '邮件模板' }
+      { key: 'smtp', keyLabel: 'mail.tab.smtp' },
+      { key: 'recipients', keyLabel: 'mail.tab.recipients' },
+      { key: 'templates', keyLabel: 'mail.tab.templates' }
     ];
     let activeTab = 'smtp';
     let recipients = [];
@@ -29,11 +29,11 @@
       const page = h('div', 'px-4 sm:px-6 py-6 max-w-4xl mx-auto');
       main.appendChild(page);
 
-      page.appendChild(h('h1', 'text-xl font-bold mb-4', '邮件告警设置'));
+      page.appendChild(h('h1', 'text-xl font-bold mb-4', t('nav.mail')));
 
       // 全局告警开关
       const toggleRow = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-4 flex items-center justify-between');
-      toggleRow.appendChild(h('div', 'text-sm', '<div class="font-medium">全局邮件告警总开关</div><div class="text-xs text-slate-400">关闭后不发送任何告警 / 恢复通知邮件</div>'));
+      toggleRow.appendChild(h('div', 'text-sm', '<div class="font-medium" data-i18n="mail.toggleTitle">' + t('mail.toggleTitle') + '</div><div class="text-xs text-slate-400" data-i18n="mail.toggleDesc">' + t('mail.toggleDesc') + '</div>'));
       const sw = h('button', 'relative w-12 h-7 rounded-full transition-colors');
       toggleRow.appendChild(sw);
       page.appendChild(toggleRow);
@@ -43,13 +43,13 @@
       page.appendChild(tabBar);
       function renderTabs() {
         tabBar.innerHTML = '';
-        TABS.forEach(t => {
+        TABS.forEach(tt => {
           const b = h('button', 'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ' +
-            (t.key === activeTab
+            (tt.key === activeTab
               ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
               : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'));
-          b.textContent = t.label;
-          b.addEventListener('click', () => { activeTab = t.key; renderTabs(); renderPanel(); });
+          b.textContent = t(tt.keyLabel);
+          b.addEventListener('click', () => { activeTab = tt.key; renderTabs(); renderPanel(); });
           tabBar.appendChild(b);
         });
       }
@@ -67,16 +67,16 @@
       /* ============ SMTP 配置 ============ */
       function renderSmtp() {
         const box = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
-        box.appendChild(h('p', 'text-xs text-slate-400 mb-4', 'SMTP 敏感凭证仅保存于 config.json，数据库中不存储明文密码。'));
+        box.appendChild(h('p', 'text-xs text-slate-400 mb-4', t('mail.smtpNote')));
         const form = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
         const enabledLabel = h('label', 'flex items-center gap-2.5 text-sm sm:col-span-2 cursor-pointer');
         const enCb = h('input', 'w-4 h-4 accent-blue-600');
         enCb.type = 'checkbox';
         enabledLabel.appendChild(enCb);
-        enabledLabel.appendChild(h('span', '', '启用 SMTP'));
+        enabledLabel.appendChild(h('span', '', t('mail.enableSmtp')));
         form.appendChild(enabledLabel);
-        form.appendChild(f('SMTP 服务器', '<input id="s-host" class="' + inp + '">'));
-        form.appendChild(f('端口', '<input id="s-port" type="number" class="' + inp + '">'));
+        form.appendChild(f(t('mail.field.host'), '<input id="s-host" class="' + inp + '">'));
+        form.appendChild(f(t('mail.field.port'), '<input id="s-port" type="number" class="' + inp + '">'));
         const secLabel = h('label', 'flex items-center gap-2.5 text-sm sm:col-span-2 cursor-pointer');
         const secCb = h('input', 'w-4 h-4 accent-blue-600');
         secCb.type = 'checkbox';
@@ -91,20 +91,20 @@
         insecLabel.appendChild(insecCb);
         insecLabel.appendChild(h('span', '', '忽略 TLS 证书校验（自签名 SMTP 证书时勾选，默认严格校验）'));
         form.appendChild(insecLabel);
-        form.appendChild(f('发件账号', '<input id="s-user" class="' + inp + '">'));
-        form.appendChild(f('发件密码 / 授权码', '<input id="s-pass" type="password" class="' + inp + '" placeholder="留空则保持原密码">'));
-        form.appendChild(f('发件人名称', '<input id="s-from-name" class="' + inp + '">'));
-        form.appendChild(f('发件邮箱', '<input id="s-from-email" class="' + inp + '">'));
+        form.appendChild(f(t('mail.field.user'), '<input id="s-user" class="' + inp + '">'));
+        form.appendChild(f(t('mail.field.pass'), '<input id="s-pass" type="password" class="' + inp + '" placeholder="留空则保持原密码">'));
+        form.appendChild(f(t('mail.field.fromName'), '<input id="s-from-name" class="' + inp + '">'));
+        form.appendChild(f(t('mail.field.fromEmail'), '<input id="s-from-email" class="' + inp + '">'));
         box.appendChild(form);
         const msg = h('div', 'mt-4 text-sm text-red-600 hidden');
         box.appendChild(msg);
         const actions = h('div', 'mt-5 flex flex-wrap items-center gap-3');
-        const save = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '保存配置');
+        const save = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', t('mail.saveConfig'));
         actions.appendChild(save);
-        const test = h('button', 'px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium', '发送测试邮件');
+        const test = h('button', 'px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium', t('mail.sendTest'));
         actions.appendChild(test);
         const testTo = h('input', 'flex-1 min-w-40 ' + inp);
-        testTo.placeholder = '测试收件邮箱（留空用发件邮箱）';
+        testTo.placeholder = t('mail.testTo');
         testTo.id = 'test-to';
         actions.appendChild(testTo);
         box.appendChild(actions);
@@ -167,7 +167,7 @@
         emailInput.placeholder = 'name@example.com';
         emailInput.type = 'email';
         addRow.appendChild(emailInput);
-        const add = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium whitespace-nowrap', '添加邮箱');
+        const add = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium whitespace-nowrap', t('mail.addEmail'));
         addRow.appendChild(add);
         box.appendChild(addRow);
 
@@ -177,7 +177,7 @@
         function renderList() {
           list.innerHTML = '';
           if (!recipients.length) {
-            list.appendChild(h('div', 'text-center py-6 text-slate-400 text-sm', '暂无接收邮箱'));
+            list.appendChild(h('div', 'text-center py-6 text-slate-400 text-sm', t('mail.noRecipients')));
             return;
           }
           recipients.forEach(r => {
@@ -194,7 +194,7 @@
             el.appendChild(toggle);
             el.appendChild(h('div', 'flex-1 text-sm truncate', esc(r.email)));
             el.appendChild(h('span', 'text-xs text-slate-400', esc(r.created_at)));
-            const del = h('button', 'px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded', '删除');
+            const del = h('button', 'px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded', t('common.delete'));
             del.addEventListener('click', async () => {
               if (!confirm('删除接收邮箱 ' + r.email + '？')) return;
               try {
@@ -241,35 +241,35 @@
 
         function renderType() {
           typeBar.innerHTML = '';
-          ['alert', 'recover'].forEach(t => {
-            const b = h('button', 'px-4 py-2 rounded-lg text-sm font-medium ' + (t === curType ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'),
-              t === 'alert' ? '告警模板' : '恢复通知模板');
-            b.addEventListener('click', () => { curType = t; renderType(); fill(); });
+          ['alert', 'recover'].forEach(tt => {
+            const b = h('button', 'px-4 py-2 rounded-lg text-sm font-medium ' + (tt === curType ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'),
+              tt === 'alert' ? t('mail.tplAlert') : t('mail.tplRecover'));
+            b.addEventListener('click', () => { curType = tt; renderType(); fill(); });
             typeBar.appendChild(b);
           });
         }
 
         function fill() {
-          const t = tplData[curType];
-          if (t) { subjectInput.value = t.subject || ''; htmlInput.value = t.html || ''; }
+          const td = tplData[curType];
+          if (td) { subjectInput.value = td.subject || ''; htmlInput.value = td.html || ''; }
         }
 
         // 变量说明
         const varsBox = h('div', 'mb-4 text-xs text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-lg p-3');
-        varsBox.appendChild(h('div', 'font-medium text-slate-600 dark:text-slate-300 mb-1.5', '可用模板变量：'));
+        varsBox.appendChild(h('div', 'font-medium text-slate-600 dark:text-slate-300 mb-1.5', t('mail.tplVars')));
         varsBox.appendChild(h('div', 'flex flex-wrap gap-2', ''));
 
         box.appendChild(typeBar);
         box.appendChild(varsBox);
-        box.appendChild(f('邮件主题', ''));
+        box.appendChild(f(t('mail.subject'), ''));
         const subjectWrap = box.lastChild.lastChild;
         subjectWrap.appendChild(subjectInput);
-        box.appendChild(f('邮件 HTML 正文', ''));
+        box.appendChild(f(t('mail.htmlBody'), ''));
         const htmlWrap = box.lastChild.lastChild;
         htmlWrap.appendChild(htmlInput);
         const actions = h('div', 'mt-5 flex flex-wrap items-center gap-3');
-        const save = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '保存模板');
-        const reset = h('button', 'px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium', '重置为默认');
+        const save = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', t('mail.saveTemplate'));
+        const reset = h('button', 'px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium', t('mail.resetTemplate'));
         actions.appendChild(save);
         actions.appendChild(reset);
         box.appendChild(actions);
@@ -326,6 +326,9 @@
           toast(on ? '告警已开启' : '告警已关闭', 'success');
         } catch (e) { toast(e.message, 'error'); }
       });
+
+      // 切换语言后重渲染 Tab 与面板
+      document.addEventListener('ws-langchange', () => { renderTabs(); renderPanel(); });
 
       renderTabs();
       renderPanel();

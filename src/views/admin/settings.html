@@ -13,35 +13,107 @@
   <script src="/assets/js/common.js"></script>
   <script>
   (() => {
-    const { api, esc, h, icon, toast } = WebStatus;
+    const { api, esc, h, icon, toast, t } = WebStatus;
     const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
+
+    const fields = {
+      slow_threshold: { keyLabel: 'settings.param.slow', min: 100 },
+      check_interval: { keyLabel: 'settings.param.check', min: 10 },
+      alert_streak: { keyLabel: 'settings.param.streak', min: 1 },
+      alert_cooldown: { keyLabel: 'settings.param.cooldown', min: 0 },
+      history_retention_days: { keyLabel: 'settings.param.history', min: 1 },
+      log_retention_days: { keyLabel: 'settings.param.logs', min: 1 },
+      cache_ttl: { keyLabel: 'settings.param.cache', min: 1 },
+      frontend_refresh: { keyLabel: 'settings.param.refresh', min: 5 },
+      max_upload_size: { keyLabel: 'settings.param.upload', min: 1 }
+    };
+    const ops = [
+      { key: 'export', keyLabel: 'settings.op.export', keyDesc: 'settings.op.exportDesc', icon: 'download', cls: 'btn-primary' },
+      { key: 'run', keyLabel: 'settings.op.run', keyDesc: 'settings.op.runDesc', icon: 'activity', cls: 'btn-normal' },
+      { key: 'clear-history', keyLabel: 'settings.op.clearHistory', keyDesc: 'settings.op.clearHistoryDesc', icon: 'database', cls: 'btn-danger' },
+      { key: 'clear-faults', keyLabel: 'settings.op.clearFaults', keyDesc: 'settings.op.clearFaultsDesc', icon: 'alertTriangle', cls: 'btn-danger' },
+      { key: 'clear-mails', keyLabel: 'settings.op.clearMails', keyDesc: 'settings.op.clearMailsDesc', icon: 'mail', cls: 'btn-danger' }
+    ];
+    let opsBox = null;
+    let svcContent = null;
+
+    async function doOp(key) {
+      if (key === 'export') {
+        window.open('/api/admin/settings/export-backup', '_blank');
+        return;
+      }
+      const confirmText = key === 'run' ? t('settings.confirm.run')
+        : key === 'clear-history' ? t('settings.confirm.clearHistory')
+        : key === 'clear-faults' ? t('settings.confirm.clearFaults')
+        : t('settings.confirm.clearMails');
+      if (!confirm(confirmText)) return;
+      try {
+        const r = await api('/api/admin/settings/' + key, { method: 'POST' });
+        toast(r.message || '操作成功', 'success');
+        if (key === 'run' && r.data) {
+          toast('本轮：' + r.data.total + ' 站，正常 ' + r.data.up + '，卡顿 ' + r.data.slow + '，离线 ' + r.data.down, 'success');
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function renderOps() {
+      if (!opsBox) return;
+      opsBox.innerHTML = '';
+      opsBox.appendChild(h('h2', 'text-sm font-semibold mb-4', t('settings.ops')));
+      ops.forEach(o => {
+        const el = h('div', 'flex items-center gap-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0');
+        el.appendChild(h('div', 'flex-1 min-w-0',
+          '<div class="flex items-center gap-2"><span class="text-slate-400">' + icon(o.icon, 'w-4 h-4') + '</span><span class="text-sm font-medium" data-i18n="' + o.keyLabel + '">' + esc(t(o.keyLabel)) + '</span></div>' +
+          '<div class="text-xs text-slate-400 mt-0.5" data-i18n="' + o.keyDesc + '">' + esc(t(o.keyDesc)) + '</div>'));
+        const btn = h('button', 'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ' +
+          (o.cls === 'btn-danger' ? 'text-red-600 border border-red-200 dark:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10'
+            : o.cls === 'btn-primary' ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
+            : 'border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'), t(o.keyLabel));
+        btn.setAttribute('data-i18n', o.keyLabel);
+        btn.addEventListener('click', () => doOp(o.key));
+        el.appendChild(btn);
+        opsBox.appendChild(el);
+      });
+    }
+
+    async function loadSvc() {
+      if (!svcContent) return;
+      try {
+        const r = await api('/api/admin/settings/service');
+        const s = r.data;
+        const run = s.lastRun || {};
+        svcContent.innerHTML = '';
+        svcContent.appendChild(h('div', 'flex items-center gap-2',
+          '<span class="w-2.5 h-2.5 rounded-full ' + (s.running ? 'bg-emerald-500' : 'bg-red-500') + '"></span>' +
+          '<span class="font-medium">' + (s.running ? esc(t('dashboard.svcRunning')) : esc(t('settings.svcStopped'))) + '</span>' +
+          (s.inRound ? '<span class="text-xs text-blue-500">本轮探测进行中…</span>' : '')));
+        svcContent.appendChild(h('div', 'text-xs text-slate-400', t('settings.lastRunTime') + esc(s.lastRunAt || t('dashboard.neverRun'))));
+        if (run.total !== undefined) {
+          svcContent.appendChild(h('div', 'text-xs text-slate-400 tabular',
+            esc(t('settings.roundSummary').replace('{total}', run.total).replace('{up}', run.up).replace('{slow}', run.slow).replace('{down}', run.down).replace('{maintenance}', run.maintenance)) +
+            (run.errors && run.errors.length ? ' · 错误 ' + run.errors.length : '')));
+        }
+        svcContent.appendChild(h('div', 'text-xs text-slate-400', t('settings.modeNote')));
+      } catch (e) { /* ignore */ }
+    }
 
     (async () => {
       const main = await WebStatus.renderAdminShell('/admin/settings');
       const page = h('div', 'px-4 sm:px-6 py-6 max-w-4xl mx-auto space-y-6');
       main.appendChild(page);
-      page.appendChild(h('h1', 'text-xl font-bold', '系统设置'));
+      page.appendChild(h('h1', 'text-xl font-bold', t('nav.settings')));
 
       /* ---------- 业务参数 ---------- */
       const paramBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
-      paramBox.appendChild(h('h2', 'text-sm font-semibold mb-4', '业务参数'));
+      paramBox.appendChild(h('h2', 'text-sm font-semibold mb-4', t('settings.params')));
       const form = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
       paramBox.appendChild(form);
-      const fields = {
-        slow_threshold: { label: '卡顿延迟阈值(ms)', min: 100 },
-        check_interval: { label: '巡检间隔(秒)', min: 10 },
-        alert_streak: { label: '抖动抑制·连续异常次数', min: 1 },
-        alert_cooldown: { label: '邮件告警冷却(秒)', min: 0 },
-        history_retention_days: { label: '历史数据保留(天)', min: 1 },
-        log_retention_days: { label: '日志保留(天)', min: 1 },
-        cache_ttl: { label: '公开缓存 TTL(秒)', min: 1 },
-        frontend_refresh: { label: '前端刷新间隔(秒)', min: 5 },
-        max_upload_size: { label: 'SQL 备份上传上限(MB)', min: 1 }
-      };
       Object.keys(fields).forEach(k => {
         const d = fields[k];
         const w = h('div', '');
-        w.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', d.label));
+        const lab = h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', t(d.keyLabel));
+        lab.setAttribute('data-i18n', d.keyLabel);
+        w.appendChild(lab);
         const input = h('input', inp);
         input.type = 'number';
         input.id = 'par-' + k;
@@ -49,7 +121,7 @@
         w.appendChild(input);
         form.appendChild(w);
       });
-      const saveBtn = h('button', 'mt-5 px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '保存业务参数');
+      const saveBtn = h('button', 'mt-5 px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', t('settings.saveParams'));
       paramBox.appendChild(saveBtn);
       page.appendChild(paramBox);
 
@@ -70,75 +142,20 @@
       });
 
       /* ---------- 运维操作 ---------- */
-      const opsBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
-      opsBox.appendChild(h('h2', 'text-sm font-semibold mb-4', '运维操作'));
-      const ops = [
-        { key: 'export', label: '导出数据库备份', desc: '下载完整 .sql 备份文件，可用于安装向导「模式 B」恢复', icon: 'download', cls: 'btn-primary' },
-        { key: 'run', label: '手动触发完整巡检', desc: '立即对所有启用站点执行一轮探测', icon: 'activity', cls: 'btn-normal' },
-        { key: 'clear-history', label: '清空监控历史', desc: '删除全部状态历史数据（不可恢复）', icon: 'database', cls: 'btn-danger' },
-        { key: 'clear-faults', label: '清空故障日志', desc: '删除全部故障记录（不可恢复）', icon: 'alertTriangle', cls: 'btn-danger' },
-        { key: 'clear-mails', label: '清空邮件发送日志', desc: '删除全部邮件发送记录（不可恢复）', icon: 'mail', cls: 'btn-danger' }
-      ];
-      ops.forEach(o => {
-        const el = h('div', 'flex items-center gap-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0');
-        el.appendChild(h('div', 'flex-1 min-w-0',
-          '<div class="flex items-center gap-2"><span class="text-slate-400">' + icon(o.icon, 'w-4 h-4') + '</span><span class="text-sm font-medium">' + o.label + '</span></div>' +
-          '<div class="text-xs text-slate-400 mt-0.5">' + o.desc + '</div>'));
-        const btn = h('button', 'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ' +
-          (o.cls === 'btn-danger' ? 'text-red-600 border border-red-200 dark:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10'
-            : o.cls === 'btn-primary' ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
-            : 'border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'), o.label);
-        btn.addEventListener('click', () => doOp(o.key));
-        el.appendChild(btn);
-        opsBox.appendChild(el);
-      });
+      opsBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
       page.appendChild(opsBox);
-
-      async function doOp(key) {
-        if (key === 'export') {
-          window.open('/api/admin/settings/export-backup', '_blank');
-          return;
-        }
-        const confirmText = key === 'run' ? '确定立即执行一轮完整巡检？'
-          : key === 'clear-history' ? '确定清空全部监控历史数据？此操作不可恢复！'
-          : key === 'clear-faults' ? '确定清空全部故障日志？此操作不可恢复！'
-          : '确定清空全部邮件发送日志？此操作不可恢复！';
-        if (!confirm(confirmText)) return;
-        try {
-          const r = await api('/api/admin/settings/' + key, { method: 'POST' });
-          toast(r.message || '操作成功', 'success');
-          if (key === 'run' && r.data) {
-            toast('本轮：' + r.data.total + ' 站，正常 ' + r.data.up + '，卡顿 ' + r.data.slow + '，离线 ' + r.data.down, 'success');
-          }
-        } catch (e) { toast(e.message, 'error'); }
-      }
+      renderOps();
 
       /* ---------- 服务运行状态 ---------- */
       const svcBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
-      svcBox.appendChild(h('h2', 'text-sm font-semibold mb-4', '服务运行状态'));
-      const svcContent = h('div', 'text-sm space-y-2');
+      svcBox.appendChild(h('h2', 'text-sm font-semibold mb-4', t('settings.service')));
+      svcContent = h('div', 'text-sm space-y-2');
       svcBox.appendChild(svcContent);
       page.appendChild(svcBox);
 
-      async function loadSvc() {
-        try {
-          const r = await api('/api/admin/settings/service');
-          const s = r.data;
-          const run = s.lastRun || {};
-          svcContent.innerHTML = '';
-          svcContent.appendChild(h('div', 'flex items-center gap-2',
-            '<span class="w-2.5 h-2.5 rounded-full ' + (s.running ? 'bg-emerald-500' : 'bg-red-500') + '"></span>' +
-            '<span class="font-medium">' + (s.running ? '巡检任务运行中' : '巡检任务未运行') + '</span>' +
-            (s.inRound ? '<span class="text-xs text-blue-500">本轮探测进行中…</span>' : '')));
-          svcContent.appendChild(h('div', 'text-xs text-slate-400', '上次巡检时间：' + esc(s.lastRunAt || '尚未运行')));
-          if (run.total !== undefined) {
-            svcContent.appendChild(h('div', 'text-xs text-slate-400 tabular',
-              '最近一轮：站点 ' + run.total + ' · 正常 ' + run.up + ' · 卡顿 ' + run.slow + ' · 离线 ' + run.down + ' · 维修 ' + run.maintenance +
-              (run.errors && run.errors.length ? ' · 错误 ' + run.errors.length : '')));
-          }
-          svcContent.appendChild(h('div', 'text-xs text-slate-400', '巡检模式：仅后端定时任务，页面访问不触发探测'));
-        } catch (e) { /* ignore */ }
-      }
+      // 切换语言后重渲染运维操作列表与服务状态
+      document.addEventListener('ws-langchange', () => { renderOps(); loadSvc(); });
+
       loadSvc();
       setInterval(loadSvc, 15000);
     })();

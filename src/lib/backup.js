@@ -103,17 +103,43 @@ async function importBackup(sqlText) {
  * SQL 分句：过滤注释行，按分号拆分
  * 注意：本系统备份由程序导出，不含存储过程/触发器，按行拆分足够安全。
  */
+/**
+ * SQL 分句：跳过注释行，正确处理字符串字面量内的分号与 '' 转义引号。
+ * 修复：备份数据值中若含分号（如错误信息"连接失败；请检查"），旧实现会误切分导致导入失败。
+ */
 function splitSql(text) {
-  const clean = String(text)
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith('--') && !l.startsWith('#') && !l.startsWith('/*'))
-    .join('\n');
-  return clean
-    .split(';')
-    .map(s => s.trim())
-    .filter(s => s.length > 2)
-    .map(s => (s.endsWith(';') ? s : s + ';'));
+  const statements = [];
+  let current = '';
+  let inString = false;
+  const lines = String(text || '').split('\n');
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    // 仅在字符串外跳过注释行，避免误伤多行字符串
+    if (!inString && (t.startsWith('--') || t.startsWith('#') || t.startsWith('/*'))) continue;
+    for (let j = 0; j < line.length; j++) {
+      const ch = line[j];
+      if (inString) {
+        current += ch;
+        if (ch === "'") {
+          if (line[j + 1] === "'") { current += "'"; j++; } // SQL 中 '' 表示转义单引号
+          else inString = false;
+        }
+        continue;
+      }
+      if (ch === "'") { inString = true; current += ch; continue; }
+      if (ch === ';') {
+        const s = current.trim();
+        if (s) statements.push(s + ';');
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+  }
+  const s = current.trim();
+  if (s) statements.push(s + ';');
+  return statements;
 }
 
 module.exports = { exportBackup, importBackup, HEADER_SIGN };
