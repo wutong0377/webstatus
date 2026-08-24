@@ -84,6 +84,13 @@
         secLabel.appendChild(secCb);
         secLabel.appendChild(h('span', '', 'SSL/TLS 加密（如 QQ/163 邮箱 465 端口选此项）'));
         form.appendChild(secLabel);
+        const insecLabel = h('label', 'flex items-center gap-2.5 text-sm sm:col-span-2 cursor-pointer');
+        const insecCb = h('input', 'w-4 h-4 accent-blue-600');
+        insecCb.type = 'checkbox';
+        insecCb.id = 's-insecure';
+        insecLabel.appendChild(insecCb);
+        insecLabel.appendChild(h('span', '', '忽略 TLS 证书校验（自签名 SMTP 证书时勾选，默认严格校验）'));
+        form.appendChild(insecLabel);
         form.appendChild(f('发件账号', '<input id="s-user" class="' + inp + '">'));
         form.appendChild(f('发件密码 / 授权码', '<input id="s-pass" type="password" class="' + inp + '" placeholder="留空则保持原密码">'));
         form.appendChild(f('发件人名称', '<input id="s-from-name" class="' + inp + '">'));
@@ -113,6 +120,7 @@
           document.getElementById('s-user').value = d.user || '';
           document.getElementById('s-from-name').value = d.from_name || '';
           document.getElementById('s-from-email').value = d.from_email || '';
+          if (d.allow_insecure_tls) insecCb.checked = true;
         });
 
         save.addEventListener('click', async () => {
@@ -124,7 +132,8 @@
             user: document.getElementById('s-user').value.trim(),
             pass: document.getElementById('s-pass').value,
             from_name: document.getElementById('s-from-name').value.trim(),
-            from_email: document.getElementById('s-from-email').value.trim()
+            from_email: document.getElementById('s-from-email').value.trim(),
+            allow_insecure_tls: insecCb.checked
           };
           try {
             await api('/api/admin/mail/config', { method: 'POST', body });

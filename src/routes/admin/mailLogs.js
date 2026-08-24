@@ -17,7 +17,7 @@ router.get('/', async (req, res, next) => {
 
     const where = [];
     const params = [];
-    if (mailType) { where.push('mail_type = ?'); params.push(mailType); }
+    if (mailType && mailType !== 'all') { where.push('mail_type = ?'); params.push(mailType); }
     if (status !== '' && status !== 'all') { where.push('status = ?'); params.push(status === '1' ? 1 : 0); }
     if (keyword) { where.push('to_email LIKE ?'); params.push('%' + keyword + '%'); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';

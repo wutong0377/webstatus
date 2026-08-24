@@ -24,9 +24,14 @@ async function httpProbe(rawUrl, timeoutMs = DEFAULT_TIMEOUT) {
     const mod = info.url.startsWith('https:') ? https : http;
 
     return await new Promise((resolve) => {
-      const req = mod.get(info.url, {
+      // 直接连接已校验的 IP，禁止二次 DNS 解析（防 DNS rebinding / TOCTOU 绕过 SSRF）
+      const req = mod.get({
+        hostname: info.ip,
+        port: info.port,
+        path: info.path,
+        servername: info.host, // TLS SNI 使用真实主机名
         timeout: timeoutMs,
-        headers: { 'User-Agent': UA, 'Accept': '*/*', 'Cache-Control': 'no-cache' }
+        headers: { Host: info.host, 'User-Agent': UA, 'Accept': '*/*', 'Cache-Control': 'no-cache' }
       }, (res) => {
         res.resume(); // 消费响应体以完成连接
         const delay = Date.now() - start;

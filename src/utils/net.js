@@ -26,8 +26,11 @@ function isPrivateIp(ip) {
   }
   if (net.isIPv6(ip)) {
     const low = ip.toLowerCase();
-    if (low === '::1' || low === '::' ) return true;                  // 回环 / 未指定
-    if (low.startsWith('::ffff:127')) return true;                    // IPv4 映射回环
+    // IPv4-mapped 地址（::ffff:x.x.x.x）→ 提取内嵌 IPv4 复用 IPv4 检查
+    if (low.startsWith('::ffff:')) {
+      return isPrivateIp(low.slice(7));
+    }
+    if (low === '::1' || low === '::') return true;                   // 回环 / 未指定
     if (low.startsWith('fe80')) return true;                          // link-local
     if (low.startsWith('fc') || low.startsWith('fd')) return true;    // ULA 唯一本地
     return false;
@@ -36,13 +39,21 @@ function isPrivateIp(ip) {
 }
 
 /**
- * 解析主机为 IP 并检测是否内网
+ * 解析主机全部 A/AAAA 记录并检测是否存在内网地址
+ * 全部记录逐一校验，任一命中内网/回环/保留地址即视为 blocked，防止多记录绕过。
  * @param {string} host 主机名
- * @returns {Promise<{host:string, ip:string, blocked:boolean}>}
+ * @returns {Promise<{host:string, addresses:string[], ip:string, blocked:boolean}>}
  */
 async function resolveHost(host) {
-  const ip = await dns.lookup(host, { all: false });
-  return { host, ip, blocked: isPrivateIp(ip) };
+  const records = await dns.lookup(host, { all: true });
+  const addresses = records.map(r => r.address);
+  const blocked = records.some(r => isPrivateIp(r.address));
+  return {
+    host,
+    addresses,
+    ip: addresses[0] || '',
+    blocked
+  };
 }
 
 /**
@@ -82,7 +93,8 @@ async function parseProbeUrl(rawUrl) {
     url: u.toString(),
     host,
     ip: resolved.ip,
-    port: u.port || (u.protocol === 'https:' ? 443 : 80)
+    port: u.port || (u.protocol === 'https:' ? 443 : 80),
+    path: (u.pathname || '/') + (u.search || '')
   };
 }
 

@@ -25,7 +25,8 @@ function createTransporter() {
     port: Number(smtp.port) || 465,
     secure: smtp.secure === true,
     auth: (smtp.user && smtp.pass) ? { user: smtp.user, pass: smtp.pass } : undefined,
-    tls: { rejectUnauthorized: false }
+    // 默认严格校验 TLS 证书；仅当后台显式勾选"忽略证书校验"（自签名 SMTP）时关闭
+    tls: { rejectUnauthorized: !(smtp.allow_insecure_tls === true) }
   });
   return transporter;
 }
@@ -48,16 +49,22 @@ function enqueue(mail) {
 }
 
 async function processQueue() {
-  while (queue.length) {
-    const mail = queue.shift();
-    try {
-      await transporter.sendMail(mail.options);
-      await logMail(mail.to, mail.mailType, 1, '');
-    } catch (e) {
-      await logMail(mail.to, mail.mailType, 0, (e && e.message) || '发送失败');
+  if (processing) return;
+  processing = true;
+  try {
+    while (queue.length) {
+      const mail = queue.shift();
+      try {
+        await transporter.sendMail(mail.options);
+        await logMail(mail.to, mail.mailType, 1, '').catch(e => console.error('[mailer] 日志写入失败:', e.message));
+      } catch (e) {
+        await logMail(mail.to, mail.mailType, 0, (e && e.message) || '发送失败').catch(() => {});
+      }
     }
+  } finally {
+    // 无论成功/失败都复位处理标志，防止队列永久停摆
+    processing = false;
   }
-  processing = false;
 }
 
 /** 写邮件发送日志 */

@@ -23,17 +23,15 @@ function logError(err, req) {
 const errorHandler = (err, req, res, next) => {
   logError(err, req);
   const status = err.status || 500;
-  const isProduction = process.env.NODE_ENV === 'production';
   // 已有响应时交给默认处理
   if (res.headersSent) return next(err);
-  // 仅 JSON 接口返回结构化错误
+  // 业务错误（status<500，如参数校验失败）返回具体提示；
+  // 内部错误统一返回友好信息，细节只写服务端日志，绝不外泄堆栈/内部结构
+  const msg = status < 500 ? (err.message || '请求失败') : '服务器内部错误，请稍后再试';
   if (req.path.startsWith('/api/')) {
-    return res.status(status).json({
-      code: status,
-      message: isProduction ? '服务器内部错误，请稍后再试' : (err.message || '服务器内部错误')
-    });
+    return res.status(status).json({ code: status, message: msg });
   }
-  res.status(status).send(isProduction ? '服务器内部错误' : (err.message || '服务器内部错误'));
+  res.status(status).send(msg);
 };
 
 module.exports = { errorHandler, logError };

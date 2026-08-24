@@ -2,10 +2,19 @@
 /**
  * 通用输入校验工具
  * 所有用户输入在写入数据库 / 使用前必须经过这里校验。
+ * 校验失败抛出带 status=400 的错误，供 errorHandler 区分"业务错误"与"内部错误"，
+ * 避免内部错误信息泄露给客户端。
  */
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const URL_RE = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
+
+/** 抛出业务错误（status=400，errorHandler 据此返回友好提示） */
+function fail(msg) {
+  const e = new Error(msg);
+  e.status = 400;
+  throw e;
+}
 
 /** 判断值是否为空 */
 function isEmpty(v) {
@@ -17,13 +26,12 @@ function isEmpty(v) {
  * @param {*} v 输入值
  * @param {number} maxLen 最大长度
  * @param {string} name 字段中文名（用于错误提示）
- * @returns 处理后字符串
  */
 function str(v, maxLen, name) {
   v = (v === undefined || v === null) ? '' : String(v);
   v = v.trim();
   if (maxLen && v.length > maxLen) {
-    throw new Error((name || '字段') + ' 长度不能超过 ' + maxLen + ' 个字符');
+    fail((name || '字段') + ' 长度不能超过 ' + maxLen + ' 个字符');
   }
   return v;
 }
@@ -31,14 +39,14 @@ function str(v, maxLen, name) {
 /** 必填字符串 */
 function requiredStr(v, maxLen, name) {
   const s = str(v, maxLen, name);
-  if (!s) throw new Error((name || '字段') + ' 不能为空');
+  if (!s) fail((name || '字段') + ' 不能为空');
   return s;
 }
 
 /** 邮箱格式校验（小写归一） */
 function email(v, name) {
   v = String(v || '').trim().toLowerCase();
-  if (!EMAIL_RE.test(v)) throw new Error((name || '邮箱') + ' 格式不正确');
+  if (!EMAIL_RE.test(v)) fail((name || '邮箱') + ' 格式不正确');
   return v;
 }
 
@@ -46,7 +54,7 @@ function email(v, name) {
 function url(v, name) {
   v = String(v || '').trim();
   if (v && !URL_RE.test(v)) {
-    throw new Error((name || 'URL') + ' 格式不正确，需以 http:// 或 https:// 开头');
+    fail((name || 'URL') + ' 格式不正确，需以 http:// 或 https:// 开头');
   }
   return v;
 }
@@ -60,8 +68,8 @@ function int(v, opts = {}) {
   const { min, max, def = 0, name = '数值' } = opts;
   const n = parseInt(v, 10);
   if (isNaN(n)) return def;
-  if (min !== undefined && n < min) throw new Error(name + ' 不能小于 ' + min);
-  if (max !== undefined && n > max) throw new Error(name + ' 不能大于 ' + max);
+  if (min !== undefined && n < min) fail(name + ' 不能小于 ' + min);
+  if (max !== undefined && n > max) fail(name + ' 不能大于 ' + max);
   return n;
 }
 
@@ -73,8 +81,8 @@ function bool(v) {
 /** 密码强度：长度 6-72（bcrypt 限制） */
 function password(v, name) {
   v = String(v || '');
-  if (v.length < 6) throw new Error((name || '密码') + ' 长度至少 6 位');
-  if (v.length > 72) throw new Error((name || '密码') + ' 长度不能超过 72 位');
+  if (v.length < 6) fail((name || '密码') + ' 长度至少 6 位');
+  if (v.length > 72) fail((name || '密码') + ' 长度不能超过 72 位');
   return v;
 }
 

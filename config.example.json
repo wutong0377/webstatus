@@ -4,7 +4,8 @@
     "port": 3000,
     "base_url": "",
     "session_secret": "",
-    "cookie_secure": false
+    "cookie_secure": false,
+    "trust_proxy": false
   },
   "database": {
     "host": "127.0.0.1",
@@ -21,7 +22,8 @@
     "user": "",
     "pass": "",
     "from_name": "WebStatus",
-    "from_email": ""
+    "from_email": "",
+    "allow_insecure_tls": false
   },
   "installed": false
 }

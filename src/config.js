@@ -17,7 +17,8 @@ const DEFAULTS = {
     port: 3000,
     base_url: '',
     session_secret: '',
-    cookie_secure: false
+    cookie_secure: false,
+    trust_proxy: false // 部署在 Nginx 反向代理后改为 true，否则 XFF 可被伪造绕过限流
   },
   database: {
     host: '127.0.0.1',
@@ -34,7 +35,8 @@ const DEFAULTS = {
     user: '',
     pass: '',
     from_name: 'WebStatus',
-    from_email: ''
+    from_email: '',
+    allow_insecure_tls: false // 仅当 SMTP 使用自签名证书时设为 true（默认严格校验）
   },
   installed: false
 };

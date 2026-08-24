@@ -46,4 +46,7 @@ function sweep() {
 /** 缓存统计 */
 function stats() { return { count: store.size }; }
 
+// 周期清理过期缓存，防止内存无限增长
+setInterval(sweep, 60 * 1000).unref();
+
 module.exports = { get, set, del, delPrefix, clear, sweep, stats };

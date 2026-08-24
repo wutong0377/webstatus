@@ -8,7 +8,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../../db');
 const cache = require('../../lib/cache');
-const { getSitesLatest } = require('../../lib/monitor');
+const { getSitesLatest, removeSiteMemory } = require('../../lib/monitor');
 const { requiredStr, str, url, int, bool } = require('../../utils/validate');
 const { validateMonitorDomain } = require('../../utils/net');
 
@@ -108,6 +108,7 @@ router.post('/:id(\\d+)/delete', async (req, res, next) => {
     await query('DELETE FROM sites WHERE id = ?', [id]);
     await query('DELETE FROM status_history WHERE site_id = ?', [id]);
     await query('DELETE FROM fault_logs WHERE site_id = ?', [id]);
+    removeSiteMemory(id); // 同步清理内存中的站点状态
     invalidateCache();
     res.json({ code: 0, message: '站点已删除' });
   } catch (e) { next(e); }

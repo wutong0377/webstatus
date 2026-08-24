@@ -124,7 +124,18 @@ cp deploy/nginx.conf /etc/nginx/conf.d/webstatus.conf
 nginx -t && systemctl reload nginx
 ```
 
-部署 HTTPS 时，请将 `config.json` 中 `app.cookie_secure` 设为 `true`（Session Cookie 仅经 HTTPS 传输）。
+部署 HTTPS 时，请将 `config.json` 中 `app.cookie_secure` 设为 `true`（Session Cookie 仅经 HTTPS 传输）；`app.trust_proxy` 设为 `true`（位于 Nginx 反向代理后，正确识别客户端 IP；否则 `X-Forwarded-For` 可被伪造绕过限流，默认关闭）。若 SMTP 服务器使用自签名证书，可在后台勾选「忽略 TLS 证书校验」。
+
+## 宝塔面板部署与伪静态
+
+1. **创建数据库**：宝塔 → 数据库 → 添加数据库（库名 `webstatus`，用户名/密码记下备用，勿用 root）；
+2. **上传源码**：把项目上传到 `/www/wwwroot/webstatus`，目录属主设为 `www`、权限 `755`；
+3. **添加 Node 项目**：宝塔 → 网站 → Node项目 → 添加：项目目录 `/www/wwwroot/webstatus`、启动命令 `npm run start`、运行端口 `3000`、Node 版本 ≥16，绑定你的域名；
+4. **伪静态**：网站 → 设置 → 伪静态，粘贴 [`deploy/bt-pseudo-static.conf`](deploy/bt-pseudo-static.conf) 内容（反代 3000 + 安全头 + 上传限制 + 禁敏感文件）；
+5. **SSL**：网站 → SSL → 申请 Let's Encrypt 证书，开启强制 HTTPS；
+6. **安装**：访问 `https://域名/install` 完成安装，重启 Node 项目后登录后台。
+
+> 完整反向代理配置见 [`deploy/nginx.conf`](deploy/nginx.conf)；伪静态专用规则见 [`deploy/bt-pseudo-static.conf`](deploy/bt-pseudo-static.conf)。
 
 ## SMTP 邮件告警配置
 

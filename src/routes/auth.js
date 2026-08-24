@@ -77,12 +77,14 @@ router.post('/login',
         recordFailure(username, ip);
         return res.status(401).json({ code: 401, message: '用户名或密码错误' });
       }
-      // 登录成功：写入 session，清空失败计数
+      // 登录成功：重新生成会话 ID（防会话固定攻击），再写入管理员身份并更新 CSRF token
+      await new Promise((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
       req.session.adminId = admins[0].id;
       req.session.username = admins[0].username;
+      ensureToken(req, res);
       resetLimit(ip);
       loginFailures.delete(lockKey(username, ip));
-      res.json({ code: 0, message: '登录成功' });
+      res.json({ code: 0, message: '登录成功', csrfToken: req.session.csrfToken });
     } catch (e) {
       res.status(500).json({ code: 500, message: '登录失败，请稍后再试' });
     }

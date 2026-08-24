@@ -30,6 +30,7 @@ let stopped = false;
 let timer = null;
 let running = false;
 let lastRunAt = null;
+let lastCleanupDay = null; // 上次自动清理的日期（跨天执行一次）
 let lastRunResult = { total: 0, up: 0, down: 0, slow: 0, maintenance: 0, errors: [] };
 
 /** 启动巡检循环（递归 setTimeout，间隔动态读取配置） */
@@ -44,6 +45,12 @@ async function loop() {
   await runOnce();
   if (stopped) return;
   const settings = await settingsSvc.getAll().catch(() => null);
+  // 每天执行一次过期数据自动清理，防止数据表无限膨胀
+  const today = formatDateTime().slice(0, 10);
+  if (today !== lastCleanupDay) {
+    lastCleanupDay = today;
+    cleanupExpired().catch(() => {});
+  }
   const interval = Math.max(10, (settings && settings.check_interval) || 60) * 1000;
   timer = setTimeout(loop, interval);
 }
@@ -53,6 +60,29 @@ function stopMonitor() {
   stopped = true;
   if (timer) clearTimeout(timer);
   timer = null;
+}
+
+/**
+ * 自动清理过期数据
+ * 按系统参数：历史数据保留天数、日志保留天数（值为天数，已由 int 校验归一为 Number）
+ */
+async function cleanupExpired() {
+  try {
+    const settings = await settingsSvc.getAll();
+    const historyDays = Math.max(0, Number(settings.history_retention_days) || 30);
+    const logDays = Math.max(0, Number(settings.log_retention_days) || 30);
+    if (historyDays > 0) {
+      await query('DELETE FROM status_history WHERE checked_at < DATE_SUB(NOW(), INTERVAL ' + historyDays + ' DAY)');
+    }
+    if (logDays > 0) {
+      await query('DELETE FROM mail_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL ' + logDays + ' DAY)');
+      // 仅清理已结束的故障记录，保留进行中的
+      await query('DELETE FROM fault_logs WHERE ended_at IS NOT NULL AND started_at < DATE_SUB(NOW(), INTERVAL ' + logDays + ' DAY)');
+    }
+    console.log('[monitor] 过期数据自动清理完成（历史 ' + historyDays + ' 天 / 日志 ' + logDays + ' 天）');
+  } catch (e) {
+    console.error('[monitor] 自动清理失败:', e.message);
+  }
 }
 
 /** 执行一轮完整巡检（手动触发 / 定时共用） */
@@ -203,4 +233,11 @@ function getServiceStatus() {
 /** 最近一次巡检结果 */
 function getLastResult() { return lastRunResult; }
 
-module.exports = { startMonitor, stopMonitor, runOnce, getSitesLatest, getServiceStatus, getLastResult };
+/** 删除站点时清理内存状态（站点被删除后调用，防 Map 无界增长） */
+function removeSiteMemory(sid) {
+  siteStreaks.delete(sid);
+  siteAlerted.delete(sid);
+  siteLastAlert.delete(sid);
+}
+
+module.exports = { startMonitor, stopMonitor, runOnce, getSitesLatest, getServiceStatus, getLastResult, removeSiteMemory };

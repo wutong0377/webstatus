@@ -16,6 +16,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const net = require('net');
+const dns = require('dns').promises;
 const multer = require('multer');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
@@ -24,6 +26,7 @@ const router = express.Router();
 const { saveConfig, ROOT } = require('../config');
 const { DEFAULT_SETTINGS } = require('../lib/settings');
 const { splitSql } = require('../lib/backup');
+const { isPrivateIp } = require('../utils/net');
 
 const TMP_DIR = path.join(ROOT, 'tmp');
 const SCHEMA_FILE = path.join(ROOT, 'schema.sql');
@@ -44,13 +47,42 @@ function safeMsg(e) {
   if (code === 'ECONNREFUSED') return '数据库连接被拒绝，请检查端口与 MySQL 是否已启动';
   if (code === 'ETIMEDOUT') return '数据库连接超时，请检查网络与防火墙';
   if (/unknown database/i.test(e.message || '')) return '数据库不存在，模式 A 会自动创建';
-  return (e.userFriendly ? e.message : '') || (e.message && e.message.slice(0, 120)) || '操作失败';
+  // 仅回显业务可读信息，绝不回显原始堆栈/内部细节
+  return (e.userFriendly ? e.message : '') || '操作失败';
+}
+
+/**
+ * 安装向导数据库主机安全校验
+ * 允许回环（127.0.0.1/::1/localhost）与公网地址；拦截解析到内网网段的主机，
+ * 防止安装向导被滥用为内网 MySQL 端口/凭据扫描器。
+ */
+async function assertSafeDbHost(host) {
+  const h = String(host || '').trim().toLowerCase();
+  if (!h || h === 'localhost' || h === '127.0.0.1' || h === '::1') return;
+  let addresses = [];
+  try {
+    const records = await dns.lookup(h, { all: true });
+    addresses = records.map(r => r.address);
+  } catch (e) {
+    const err = new Error('数据库主机无法解析，已拦截（请核对主机名）');
+    err.userFriendly = true;
+    throw err;
+  }
+  for (const ip of addresses) {
+    const loopback = (net.isIPv4(ip) && ip.startsWith('127.')) || ip === '::1';
+    if (isPrivateIp(ip) && !loopback) {
+      const err = new Error('数据库主机解析到内网地址，出于安全已拦截；本机请用 127.0.0.1，外部请使用公网地址');
+      err.userFriendly = true;
+      throw err;
+    }
+  }
 }
 
 /** 连接用户配置的数据库并确保库存在（返回连接） */
 async function connectForInstall(body) {
   const db = body.db || body;
   const dbName = String(db.database || 'webstatus').trim().replace(/`/g, '');
+  await assertSafeDbHost(db.host);
   const conn = await mysql.createConnection({
     host: String(db.host || '127.0.0.1').trim(),
     port: Number(db.port) || 3306,
@@ -97,6 +129,7 @@ router.post('/api/test-db', async (req, res) => {
   const { host, port, user, password, database } = req.body || {};
   let conn;
   try {
+    await assertSafeDbHost(host);
     conn = await mysql.createConnection({
       host: String(host || '').trim() || '127.0.0.1',
       port: Number(port) || 3306,
@@ -128,6 +161,7 @@ router.post('/api/init-db', async (req, res) => {
   const dbName = String(database || 'webstatus').trim().replace(/`/g, '');
   let conn;
   try {
+    await assertSafeDbHost(host);
     conn = await mysql.createConnection({
       host: String(host || '').trim() || '127.0.0.1',
       port: Number(port) || 3306,
@@ -245,7 +279,9 @@ async function restoreFromConn(conn, sqlText) {
 /* ------------------- 4. 管理员账号创建 ------------------- */
 router.post('/api/setup-admin', async (req, res) => {
   const username = String((req.body && req.body.username) || '').trim();
-  const password = String((req.body && req.body.password) || '');
+  // 注意：管理员密码走 admin_password 独立字段。
+  // req.body.password 是数据库密码（由前端展开 dbInfo 传入），绝不能当作管理员密码使用。
+  const password = String((req.body && (req.body.admin_password || req.body.adminPass)) || '');
   if (username.length < 3 || username.length > 50) {
     return res.status(400).json({ code: 400, message: '管理员用户名需为 3-50 个字符' });
   }

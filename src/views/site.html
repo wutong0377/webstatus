@@ -71,6 +71,21 @@
     const $ = s => document.querySelector(s);
     const id = Number(location.pathname.split('/').pop());
     let chart = null;
+
+    /** 故障持续时长人类可读 */
+    function fmtDur(sec) {
+      sec = Math.max(0, Math.floor(Number(sec) || 0));
+      const d = Math.floor(sec / 86400);
+      const hh = Math.floor((sec % 86400) / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      const parts = [];
+      if (d) parts.push(d + '天');
+      if (hh) parts.push(hh + '时');
+      if (m) parts.push(m + '分');
+      if (s || !parts.length) parts.push(s + '秒');
+      return parts.join('');
+    }
     let range = 'day';
     const RANGES = [
       { key: 'hour', label: '1小时' },
@@ -199,9 +214,7 @@
         mid.textContent = f.error_msg || '';
         el.appendChild(mid);
         const right = h('div', 'text-xs text-slate-500 tabular sm:text-right');
-        right.textContent = fmtTime(f.started_at) + (f.ended_at ? ' → ' + fmtTime(f.ended_at) : ' · 进行中') + (f.duration_sec ? '（' + WebStatus.fmtBytes(f.duration_sec) + 's）' : '');
-        // 持续时长
-        right.textContent = fmtTime(f.started_at) + (f.ended_at ? ' → ' + fmtTime(f.ended_at) : ' · 进行中');
+        right.textContent = fmtTime(f.started_at) + (f.ended_at ? ' → ' + fmtTime(f.ended_at) : ' · 进行中') + (f.duration_sec ? '（持续 ' + fmtDur(f.duration_sec) + '）' : '');
         el.appendChild(right);
         list.appendChild(el);
       });

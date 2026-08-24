@@ -58,10 +58,11 @@
         btn.disabled = true; btn.textContent = '登录中...';
         err.classList.add('hidden');
         try {
-          await api('/api/auth/login', {
+          const r = await api('/api/auth/login', {
             method: 'POST',
             body: { username: $('#username').value.trim(), password: $('#password').value }
           });
+          if (r.csrfToken) WebStatus.setCsrf(r.csrfToken);
           location.href = '/admin/dashboard';
         } catch (e) {
           err.textContent = e.message || '登录失败';

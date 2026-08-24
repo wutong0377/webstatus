@@ -29,6 +29,7 @@ router.get('/config', (req, res) => {
       user: s.user || '',
       from_name: s.from_name || '',
       from_email: s.from_email || '',
+      allow_insecure_tls: s.allow_insecure_tls === true,
       pass_masked: s.pass ? '******' : ''
     }
   });
@@ -46,7 +47,8 @@ router.post('/config', (req, res, next) => {
       user: str(s.user, 200, '发件账号'),
       pass: (s.pass && String(s.pass) !== '') ? String(s.pass) : cur.pass, // 留空保留原密码
       from_name: str(s.from_name, 100, '发件人名称'),
-      from_email: s.from_email ? email(s.from_email, '发件邮箱') : cur.from_email
+      from_email: s.from_email ? email(s.from_email, '发件邮箱') : cur.from_email,
+      allow_insecure_tls: bool(s.allow_insecure_tls) // 忽略 TLS 证书校验开关
     };
     saveConfig({ smtp: nextCfg });
     mailer.createTransporter();

@@ -319,7 +319,8 @@
         if (p !== p2) { msg.textContent = '两次输入的密码不一致'; msg.classList.remove('hidden'); return; }
         btn.disabled = true; btn.textContent = '创建中...';
         try {
-          await api('/install/api/setup-admin', { method: 'POST', body: { ...dbInfo, username: u, password: p } });
+          // 管理员密码用独立字段 admin_password，避免覆盖 dbInfo 中的数据库密码
+          await api('/install/api/setup-admin', { method: 'POST', body: { ...dbInfo, username: u, admin_password: p } });
           go(5);
         } catch (e) { msg.textContent = e.message; msg.classList.remove('hidden'); btn.disabled = false; btn.textContent = '创建账号，下一步'; }
       });
@@ -406,7 +407,7 @@
       form.appendChild(secureRow);
       form.appendChild(field('发件账号', `<input id="sm-user" class="${inputCls}" value="${esc(smtpInfo.user)}">`));
       form.appendChild(field('发件密码 / 授权码', `<input id="sm-pass" type="password" class="${inputCls}">`));
-      grid2 = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+      const grid2 = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
       grid2.appendChild(field('发件人名称', `<input id="sm-from-name" class="${inputCls}" value="${esc(smtpInfo.from_name)}">`));
       grid2.appendChild(field('发件邮箱', `<input id="sm-from-email" class="${inputCls}" value="${esc(smtpInfo.from_email)}">`));
       form.appendChild(grid2);

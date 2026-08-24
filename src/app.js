@@ -17,9 +17,18 @@ const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 app.disable('x-powered-by');
-app.set('trust proxy', 1); // 位于 Nginx 反向代理之后，正确识别客户端 IP
+// 仅当部署在反向代理之后才信任 X-Forwarded-For，否则攻击者可伪造 IP 绕过限流/登录锁定
+app.set('trust proxy', config.app.trust_proxy === true ? 1 : false);
 
 const VIEWS = path.join(ROOT, 'src', 'views');
+
+// 启动时清理安装阶段残留的临时上传文件（SQL 备份），不留敏感数据
+const TMP_DIR = path.join(ROOT, 'tmp');
+if (fs.existsSync(TMP_DIR)) {
+  try {
+    fs.readdirSync(TMP_DIR).forEach(f => { if (f.endsWith('.sql')) fs.unlinkSync(path.join(TMP_DIR, f)); });
+  } catch (e) { /* 忽略清理失败 */ }
+}
 
 // ---------------- 全局中间件 ----------------
 app.use(securityHeaders);
@@ -36,7 +45,8 @@ app.use(session({
   name: 'webstatus.sid',
   cookie: {
     httpOnly: true,
-    secure: config.app.cookie_secure === true,
+    // base_url 配置为 https 时自动开启 Secure，防止会话 Cookie 走明文链路
+    secure: config.app.cookie_secure === true || String(config.app.base_url || '').startsWith('https://'),
     sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000
   }
@@ -58,6 +68,9 @@ if (!config.installed) {
   // 初始化数据库连接池
   const { createPool } = require('./db');
   createPool(config.database);
+
+  // 初始化 SMTP transporter（未启用 SMTP 时无害，发送前仍会校验 enabled）
+  require('./lib/mailer').createTransporter();
 
   // 确保默认邮件模板存在（后台可编辑）
   require('./lib/templates').ensureDefaults().catch(() => {});

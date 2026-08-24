@@ -265,6 +265,7 @@ const WebStatus = (() => {
 
   return {
     api, setCsrf, esc, h, icon, toast, applyTheme, toggleTheme,
-    STATUS_META, fmtTime, fmtDelay, fmtBytes, renderAdminShell
+    STATUS_META, fmtTime, fmtDelay, fmtBytes, renderAdminShell,
+    get isDark() { return dark; }
   };
 })();
