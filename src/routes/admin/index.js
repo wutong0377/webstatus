@@ -20,5 +20,6 @@ router.use('/mail', require('./mail'));
 router.use('/mail-logs', require('./mailLogs'));
 router.use('/fault-logs', require('./faultLogs'));
 router.use('/settings', require('./settings'));
+router.use('/alerts', require('./alerts'));
 
 module.exports = router;

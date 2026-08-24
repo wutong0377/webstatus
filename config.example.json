@@ -25,5 +25,11 @@
     "from_email": "",
     "allow_insecure_tls": false
   },
+  "onebot": {
+    "enabled": false,
+    "api_url": "",
+    "token": "",
+    "group": ""
+  },
   "installed": false
 }

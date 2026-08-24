@@ -38,6 +38,12 @@ const DEFAULTS = {
     from_email: '',
     allow_insecure_tls: false // 仅当 SMTP 使用自签名证书时设为 true（默认严格校验）
   },
+  onebot: {
+    enabled: false, // OneBot QQ 机器人（预留，需自行实现发送逻辑）
+    api_url: '',
+    token: '',
+    group: ''
+  },
   installed: false
 };
 
