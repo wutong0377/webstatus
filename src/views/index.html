@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网站状态监控 WebStatus</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+
+  <!-- 顶栏 -->
+  <header class="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="text-blue-600 flex-shrink-0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </span>
+        <span class="font-semibold whitespace-nowrap">WebStatus</span>
+        <span class="text-xs text-slate-400 hidden sm:inline truncate">网站状态监控</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <div class="bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 flex">
+          <button id="view-card" class="px-2.5 py-1.5 rounded-md text-xs font-medium">卡片</button>
+          <button id="view-list" class="px-2.5 py-1.5 rounded-md text-xs font-medium">列表</button>
+        </div>
+        <button id="theme-btn" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"></button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 公告栏 -->
+  <div class="max-w-6xl mx-auto px-4 mt-4">
+    <div id="notice-bar" class="hidden"></div>
+  </div>
+
+  <!-- 统计 -->
+  <div class="max-w-6xl mx-auto px-4 mt-4">
+    <div id="stat-row" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+  </div>
+
+  <!-- 站点 -->
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <div id="site-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    <div id="site-list" class="hidden space-y-2"></div>
+    <div id="empty" class="hidden mt-16 text-center">
+      <div class="text-slate-300 dark:text-slate-700 mb-3">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-14 h-14 mx-auto"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <p class="text-slate-400">暂无监控站点</p>
+    </div>
+  </main>
+
+  <footer class="max-w-6xl mx-auto px-4 py-8 text-center text-xs text-slate-400">
+    Powered by WebStatus · 开源自托管网站状态监控系统
+  </footer>
+
+  <script src="/assets/js/common.js"></script>
+  <script>
+  (() => {
+    const $ = s => document.querySelector(s);
+    const { api, esc, h, icon, toast, STATUS_META, fmtDelay } = WebStatus;
+
+    let sites = [];
+    let miniData = {};
+    let refreshSec = 30;
+    let view = localStorage.getItem('ws_view') || 'card';
+
+    /* ---------- 视图切换 ---------- */
+    function applyView() {
+      const grid = $('#site-grid');
+      const list = $('#site-list');
+      if (!sites.length) return;
+      if (view === 'card') { grid.classList.remove('hidden'); list.classList.add('hidden'); }
+      else { list.classList.remove('hidden'); grid.classList.add('hidden'); }
+      $('#view-card').classList.toggle('bg-white', view === 'card');
+      $('#view-card').classList.toggle('shadow-sm', view === 'card');
+      $('#view-list').classList.toggle('bg-white', view === 'list');
+      $('#view-list').classList.toggle('shadow-sm', view === 'list');
+    }
+    $('#view-card').addEventListener('click', () => { view = 'card'; localStorage.setItem('ws_view', 'card'); applyView(); });
+    $('#view-list').addEventListener('click', () => { view = 'list'; localStorage.setItem('ws_view', 'list'); applyView(); });
+
+    /* ---------- 主题 ---------- */
+    const themeBtn = $('#theme-btn');
+    themeBtn.innerHTML = icon('moon', 'w-5 h-5');
+    themeBtn.addEventListener('click', () => {
+      WebStatus.toggleTheme();
+      themeBtn.innerHTML = icon(WebStatus.isDark ? 'sun' : 'moon', 'w-5 h-5');
+    });
+
+    /* ---------- 公告 ---------- */
+    function renderNotices(notices) {
+      const bar = $('#notice-bar');
+      if (!notices.length) { bar.classList.add('hidden'); return; }
+      bar.classList.remove('hidden');
+      bar.innerHTML = '';
+      notices.forEach(n => {
+        const item = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 mb-2 flex items-start gap-3');
+        item.innerHTML = '<span class="text-blue-500 flex-shrink-0 mt-0.5">' + icon('megaphone', 'w-4 h-4') + '</span>';
+        const content = h('div', 'min-w-0 text-sm');
+        const title = h('div', 'font-medium' + (n.is_pinned ? ' text-blue-600 dark:text-blue-400' : ''));
+        title.textContent = n.title;
+        content.appendChild(title);
+        if (n.content) content.appendChild(h('div', 'mt-1 text-slate-500 dark:text-slate-400 text-sm', n.content));
+        item.appendChild(content);
+        bar.appendChild(item);
+      });
+    }
+
+    /* ---------- 统计 ---------- */
+    function renderStats() {
+      const counts = { up: 0, slow: 0, down: 0, maintenance: 0 };
+      sites.forEach(s => {
+        if (s.status === 1) counts.up++;
+        else if (s.status === 2) counts.slow++;
+        else if (s.status === 3) counts.down++;
+        else if (s.status === 4) counts.maintenance++;
+      });
+      const items = [
+        { label: '正常', val: counts.up, cls: 'text-emerald-600 dark:text-emerald-400' },
+        { label: '卡顿', val: counts.slow, cls: 'text-amber-600 dark:text-amber-400' },
+        { label: '离线', val: counts.down, cls: 'text-red-600 dark:text-red-400' },
+        { label: '维修', val: counts.maintenance, cls: 'text-blue-600 dark:text-blue-400' }
+      ];
+      const row = $('#stat-row');
+      row.innerHTML = '';
+      items.forEach(it => {
+        row.appendChild(h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between',
+          '<span class="text-sm text-slate-500">' + it.label + '</span><span class="text-2xl font-semibold tabular ' + it.cls + '">' + it.val + '</span>'));
+      });
+    }
+
+    /* ---------- 卡片 ---------- */
+    function card(s) {
+      const meta = STATUS_META[s.status] || STATUS_META[0];
+      const el = h('a', 'card-hover bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 block');
+      el.href = '/site/' + s.id;
+
+      const head = h('div', 'flex items-start justify-between gap-2');
+      const titleWrap = h('div', 'flex items-center gap-3 min-w-0');
+      if (s.icon_url) {
+        const img = h('img', 'w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 object-contain p-1 flex-shrink-0');
+        img.src = s.icon_url;
+        img.referrerPolicy = 'no-referrer';
+        img.onerror = () => { img.replaceWith(iconWrap()); };
+        titleWrap.appendChild(img);
+      } else {
+        titleWrap.appendChild(iconWrap());
+      }
+      const nameWrap = h('div', 'min-w-0');
+      nameWrap.appendChild(h('div', 'font-semibold truncate', esc(s.name)));
+      nameWrap.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(s.domain)));
+      titleWrap.appendChild(nameWrap);
+      head.appendChild(titleWrap);
+      head.appendChild(h('span', 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset ' + meta.badge,
+        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + meta.text + '</span>'));
+      el.appendChild(head);
+
+      if (s.description) {
+        el.appendChild(h('p', 'mt-2 text-sm text-slate-500 dark:text-slate-400', esc(s.description)));
+      }
+      if (s.maintenance === 1 && s.maintenance_note) {
+        el.appendChild(h('div', 'mt-2 text-xs text-blue-600 dark:text-blue-400', '维修说明：' + esc(s.maintenance_note)));
+      }
+
+      const metrics = h('div', 'mt-3 grid grid-cols-3 gap-2 text-center');
+      metrics.innerHTML =
+        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">延迟</div><div class="text-sm font-medium tabular">' + fmtDelay(s.last_delay) + '</div></div>' +
+        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">状态码</div><div class="text-sm font-medium tabular">' + (s.last_http_code ? esc(s.last_http_code) : '-') + '</div></div>' +
+        '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">最近检测</div><div class="text-sm font-medium tabular text-xs">' + (s.last_checked_at ? esc(s.last_checked_at.slice(5, 16)) : '-') + '</div></div>';
+      el.appendChild(metrics);
+
+      const mini = miniData[s.id] || [];
+      if (mini.length) {
+        const tl = h('div', 'mt-3 flex items-center gap-1');
+        mini.forEach(p => {
+          const m = STATUS_META[p.status] || STATUS_META[0];
+          tl.appendChild(h('div', 'h-1.5 flex-1 rounded-full ' + m.dot));
+        });
+        el.appendChild(tl);
+      }
+
+      if (s.status === 3 && s.last_error_code) {
+        el.appendChild(h('div', 'mt-3 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg p-2.5',
+          '<strong>' + esc(s.last_error_code) + '</strong> · ' + esc(s.last_error_msg || '探测异常')));
+      }
+      return el;
+    }
+
+    function iconWrap() {
+      return h('div', 'w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0', icon('globe', 'w-5 h-5'));
+    }
+
+    /* ---------- 列表行 ---------- */
+    function row(s) {
+      const meta = STATUS_META[s.status] || STATUS_META[0];
+      const el = h('a', 'card-hover bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex items-center gap-3 block');
+      el.href = '/site/' + s.id;
+      el.appendChild(h('span', 'w-2.5 h-2.5 rounded-full flex-shrink-0 ' + meta.dot));
+      const nameWrap = h('div', 'min-w-0 flex-1');
+      nameWrap.appendChild(h('div', 'font-medium truncate', esc(s.name)));
+      nameWrap.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(s.domain)));
+      el.appendChild(nameWrap);
+      el.appendChild(h('div', 'hidden sm:block text-sm tabular text-slate-500', '延迟 ' + fmtDelay(s.last_delay)));
+      el.appendChild(h('span', 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset flex-shrink-0 ' + meta.badge,
+        icon(meta.icon, 'w-3.5 h-3.5') + '<span>' + meta.text + '</span>'));
+      return el;
+    }
+
+    /* ---------- 渲染 ---------- */
+    function renderSites() {
+      const grid = $('#site-grid');
+      const list = $('#site-list');
+      const empty = $('#empty');
+      grid.innerHTML = '';
+      list.innerHTML = '';
+      if (!sites.length) {
+        empty.classList.remove('hidden');
+        grid.classList.add('hidden');
+        list.classList.add('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      applyView();
+      if (view === 'card') sites.forEach(s => grid.appendChild(card(s)));
+      else sites.forEach(s => list.appendChild(row(s)));
+    }
+
+    /* ---------- 拉取数据 ---------- */
+    async function load() {
+      try {
+        const r = await api('/api/public/status');
+        refreshSec = r.refresh || 30;
+        sites = r.data || [];
+        const ids = sites.map(s => s.id).join(',');
+        if (ids) {
+          const m = await api('/api/public/mini-timeline?id=' + ids).catch(() => ({ data: {} }));
+          miniData = m.data || {};
+        } else { miniData = {}; }
+        renderStats();
+        renderSites();
+      } catch (e) {
+        // 未安装状态，服务端会重定向；静默即可
+      }
+    }
+
+    async function loadNotices() {
+      try {
+        const r = await api('/api/public/notices');
+        renderNotices(r.data || []);
+      } catch (e) { /* ignore */ }
+    }
+
+    // 防抖轮询：页面不可见时不请求
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') load();
+    });
+
+    load();
+    loadNotices();
+    setInterval(() => { if (document.visibilityState !== 'hidden') { load(); loadNotices(); } }, Math.max(5, refreshSec) * 1000);
+  })();
+  </script>
+</body>
+</html>

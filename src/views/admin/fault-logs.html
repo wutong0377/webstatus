@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>故障日志 - WebStatus 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div id="admin-shell"></div>
+  <script src="/assets/js/common.js"></script>
+  <script>
+  (() => {
+    const { api, esc, h, toast } = WebStatus;
+    const sel = 'px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40';
+    const inp = 'px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40';
+
+    (async () => {
+      const main = await WebStatus.renderAdminShell('/admin/fault-logs');
+      const page = h('div', 'px-4 sm:px-6 py-6 max-w-6xl mx-auto');
+      main.appendChild(page);
+      page.appendChild(h('h1', 'text-xl font-bold mb-5', '故障日志'));
+
+      const filter = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3');
+      const fSite = h('select', sel);
+      const allSite = h('option', '全部站点'); allSite.value = ''; fSite.appendChild(allSite);
+      const fStatus = h('select', sel);
+      [['', '全部状态'], ['3', '离线'], ['2', '卡顿']].forEach(o => {
+        const op = h('option', o[1]); op.value = o[0]; fStatus.appendChild(op);
+      });
+      const fCode = h('input', inp);
+      fCode.placeholder = '错误码（如 HTTP_503）';
+      const btn = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '查询');
+      [h('div', 'text-xs text-slate-400 pb-2', '站点'), h('div', 'text-xs text-slate-400 pb-2', '状态'), h('div', 'text-xs text-slate-400 pb-2', '错误码')].forEach((lb, i) => {
+        const cell = h('div', '');
+        cell.appendChild(lb);
+        cell.appendChild([fSite, fStatus, fCode][i]);
+        filter.appendChild(cell);
+      });
+      filter.appendChild(h('div', 'flex-1 min-w-10', ''));
+      filter.appendChild(btn);
+      page.appendChild(filter);
+
+      const box = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4');
+      page.appendChild(box);
+      const list = h('div', 'space-y-2.5');
+      box.appendChild(list);
+
+      const pager = h('div', 'mt-4 flex items-center justify-between gap-3 flex-wrap');
+      box.appendChild(pager);
+
+      let pageNum = 1;
+      let total = 0;
+
+      // 站点选项
+      api('/api/admin/settings/site-options').then(r => {
+        (r.data || []).forEach(s => {
+          const op = h('option', esc(s.name)); op.value = s.id; fSite.appendChild(op);
+        });
+      }).catch(() => {});
+
+      async function load() {
+        const q = new URLSearchParams({ page: pageNum, size: 15, site_id: fSite.value, status: fStatus.value, code: fCode.value.trim() });
+        try {
+          const r = await api('/api/admin/fault-logs/?' + q.toString());
+          total = r.total;
+          list.innerHTML = '';
+          if (!r.data.length) {
+            list.appendChild(h('div', 'text-center py-10 text-slate-400 text-sm', '暂无故障记录'));
+          }
+          r.data.forEach(f => {
+            const el = h('div', 'border border-slate-200 dark:border-slate-800 rounded-xl p-3.5');
+            const top = h('div', 'flex items-center gap-2 flex-wrap');
+            top.appendChild(h('span', 'w-2 h-2 rounded-full ' + (f.fault_status === 3 ? 'bg-red-500' : 'bg-amber-500')));
+            top.appendChild(h('span', 'font-medium text-sm', esc(f.site_name || ('站点#' + f.site_id))));
+            top.appendChild(h('span', 'px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500',
+              f.fault_status === 3 ? '离线' : '卡顿'));
+            if (f.error_code) top.appendChild(h('code', 'px-2 py-0.5 rounded text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', esc(f.error_code)));
+            top.appendChild(h('span', 'text-xs text-slate-400 ml-auto tabular', esc(f.started_at) + (f.ended_at ? ' → ' + esc(f.ended_at) : ' · 进行中')));
+            el.appendChild(top);
+            if (f.error_msg) el.appendChild(h('div', 'mt-2 text-xs text-slate-500', esc(f.error_msg)));
+            // 完整错误解读
+            if (f.explain) {
+              const ex = h('div', 'mt-2 text-xs bg-slate-50 dark:bg-slate-800 rounded-lg p-3 space-y-1');
+              ex.innerHTML = '<div><span class="text-slate-400">名称：</span><span class="font-medium">' + esc(f.explain.name) + '</span></div>' +
+                '<div><span class="text-slate-400">成因：</span>' + esc(f.explain.cause) + '</div>' +
+                (f.explain.causes.length ? '<div><span class="text-slate-400">诱因：</span>' + esc(f.explain.causes.join('、')) + '</div>' : '') +
+                '<div><span class="text-slate-400">建议：</span>' + esc(f.explain.tips) + '</div>' +
+                '<div><span class="text-slate-400">影响等级：</span>' + (f.explain.level === 3 ? '高' : f.explain.level === 2 ? '中' : '低') + '</div>';
+              el.appendChild(ex);
+            }
+            list.appendChild(el);
+          });
+          renderPager();
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      function renderPager() {
+        const pages = Math.max(1, Math.ceil(total / 15));
+        pager.innerHTML = '';
+        pager.appendChild(h('span', 'text-xs text-slate-400', '共 ' + total + ' 条 · 第 ' + pageNum + ' / ' + pages + ' 页'));
+        const btns = h('div', 'flex gap-2');
+        const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', '上一页');
+        prev.disabled = pageNum <= 1;
+        prev.addEventListener('click', () => { pageNum--; load(); });
+        btns.appendChild(prev);
+        const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', '下一页');
+        next.disabled = pageNum >= pages;
+        next.addEventListener('click', () => { pageNum++; load(); });
+        btns.appendChild(next);
+        pager.appendChild(btns);
+      }
+
+      btn.addEventListener('click', () => { pageNum = 1; load(); });
+      load();
+    })();
+  })();
+  </script>
+</body>
+</html>

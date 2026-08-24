@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>邮件告警设置 - WebStatus 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div id="admin-shell"></div>
+  <script src="/assets/js/common.js"></script>
+  <script>
+  (() => {
+    const { api, esc, h, icon, toast } = WebStatus;
+    const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
+    const TABS = [
+      { key: 'smtp', label: 'SMTP 配置' },
+      { key: 'recipients', label: '接收邮箱' },
+      { key: 'templates', label: '邮件模板' }
+    ];
+    let activeTab = 'smtp';
+    let recipients = [];
+    let tplVars = [];
+
+    (async () => {
+      const main = await WebStatus.renderAdminShell('/admin/mail');
+      const page = h('div', 'px-4 sm:px-6 py-6 max-w-4xl mx-auto');
+      main.appendChild(page);
+
+      page.appendChild(h('h1', 'text-xl font-bold mb-4', '邮件告警设置'));
+
+      // 全局告警开关
+      const toggleRow = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-4 flex items-center justify-between');
+      toggleRow.appendChild(h('div', 'text-sm', '<div class="font-medium">全局邮件告警总开关</div><div class="text-xs text-slate-400">关闭后不发送任何告警 / 恢复通知邮件</div>'));
+      const sw = h('button', 'relative w-12 h-7 rounded-full transition-colors');
+      toggleRow.appendChild(sw);
+      page.appendChild(toggleRow);
+
+      // Tab
+      const tabBar = h('div', 'flex gap-1 mb-5 border-b border-slate-200 dark:border-slate-800');
+      page.appendChild(tabBar);
+      function renderTabs() {
+        tabBar.innerHTML = '';
+        TABS.forEach(t => {
+          const b = h('button', 'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ' +
+            (t.key === activeTab
+              ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100'
+              : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'));
+          b.textContent = t.label;
+          b.addEventListener('click', () => { activeTab = t.key; renderTabs(); renderPanel(); });
+          tabBar.appendChild(b);
+        });
+      }
+
+      const panelWrap = h('div');
+      page.appendChild(panelWrap);
+
+      function renderPanel() {
+        panelWrap.innerHTML = '';
+        if (activeTab === 'smtp') renderSmtp();
+        else if (activeTab === 'recipients') renderRecipients();
+        else renderTemplates();
+      }
+
+      /* ============ SMTP 配置 ============ */
+      function renderSmtp() {
+        const box = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
+        box.appendChild(h('p', 'text-xs text-slate-400 mb-4', 'SMTP 敏感凭证仅保存于 config.json，数据库中不存储明文密码。'));
+        const form = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+        const enabledLabel = h('label', 'flex items-center gap-2.5 text-sm sm:col-span-2 cursor-pointer');
+        const enCb = h('input', 'w-4 h-4 accent-blue-600');
+        enCb.type = 'checkbox';
+        enabledLabel.appendChild(enCb);
+        enabledLabel.appendChild(h('span', '', '启用 SMTP'));
+        form.appendChild(enabledLabel);
+        form.appendChild(f('SMTP 服务器', '<input id="s-host" class="' + inp + '">'));
+        form.appendChild(f('端口', '<input id="s-port" type="number" class="' + inp + '">'));
+        const secLabel = h('label', 'flex items-center gap-2.5 text-sm sm:col-span-2 cursor-pointer');
+        const secCb = h('input', 'w-4 h-4 accent-blue-600');
+        secCb.type = 'checkbox';
+        secCb.checked = true;
+        secLabel.appendChild(secCb);
+        secLabel.appendChild(h('span', '', 'SSL/TLS 加密（如 QQ/163 邮箱 465 端口选此项）'));
+        form.appendChild(secLabel);
+        form.appendChild(f('发件账号', '<input id="s-user" class="' + inp + '">'));
+        form.appendChild(f('发件密码 / 授权码', '<input id="s-pass" type="password" class="' + inp + '" placeholder="留空则保持原密码">'));
+        form.appendChild(f('发件人名称', '<input id="s-from-name" class="' + inp + '">'));
+        form.appendChild(f('发件邮箱', '<input id="s-from-email" class="' + inp + '">'));
+        box.appendChild(form);
+        const msg = h('div', 'mt-4 text-sm text-red-600 hidden');
+        box.appendChild(msg);
+        const actions = h('div', 'mt-5 flex flex-wrap items-center gap-3');
+        const save = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '保存配置');
+        actions.appendChild(save);
+        const test = h('button', 'px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium', '发送测试邮件');
+        actions.appendChild(test);
+        const testTo = h('input', 'flex-1 min-w-40 ' + inp);
+        testTo.placeholder = '测试收件邮箱（留空用发件邮箱）';
+        testTo.id = 'test-to';
+        actions.appendChild(testTo);
+        box.appendChild(actions);
+        panelWrap.appendChild(box);
+
+        // 填充现有配置
+        api('/api/admin/mail/config').then(r => {
+          const d = r.data;
+          enCb.checked = d.enabled;
+          document.getElementById('s-host').value = d.host || '';
+          document.getElementById('s-port').value = d.port || 465;
+          secCb.checked = d.secure !== false;
+          document.getElementById('s-user').value = d.user || '';
+          document.getElementById('s-from-name').value = d.from_name || '';
+          document.getElementById('s-from-email').value = d.from_email || '';
+        });
+
+        save.addEventListener('click', async () => {
+          const body = {
+            enabled: enCb.checked,
+            host: document.getElementById('s-host').value.trim(),
+            port: Number(document.getElementById('s-port').value) || 465,
+            secure: secCb.checked,
+            user: document.getElementById('s-user').value.trim(),
+            pass: document.getElementById('s-pass').value,
+            from_name: document.getElementById('s-from-name').value.trim(),
+            from_email: document.getElementById('s-from-email').value.trim()
+          };
+          try {
+            await api('/api/admin/mail/config', { method: 'POST', body });
+            toast('SMTP 配置已保存', 'success');
+          } catch (e) { toast(e.message, 'error'); }
+        });
+
+        test.addEventListener('click', async () => {
+          const to = document.getElementById('test-to').value.trim() || document.getElementById('s-from-email').value.trim();
+          try {
+            await api('/api/admin/mail/test', { method: 'POST', body: { to_email: to } });
+            toast('测试邮件已发送至 ' + to, 'success');
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      }
+
+      function f(label, inputHtml) {
+        const w = h('div', '');
+        w.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', label));
+        const wrap = h('div', '');
+        wrap.innerHTML = inputHtml;
+        w.appendChild(wrap);
+        return w;
+      }
+
+      /* ============ 接收邮箱 ============ */
+      function renderRecipients() {
+        const box = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
+        const addRow = h('div', 'flex gap-3 mb-4');
+        const emailInput = h('input', 'flex-1 ' + inp);
+        emailInput.placeholder = 'name@example.com';
+        emailInput.type = 'email';
+        addRow.appendChild(emailInput);
+        const add = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium whitespace-nowrap', '添加邮箱');
+        addRow.appendChild(add);
+        box.appendChild(addRow);
+
+        const list = h('div', 'space-y-2');
+        box.appendChild(list);
+
+        function renderList() {
+          list.innerHTML = '';
+          if (!recipients.length) {
+            list.appendChild(h('div', 'text-center py-6 text-slate-400 text-sm', '暂无接收邮箱'));
+            return;
+          }
+          recipients.forEach(r => {
+            const el = h('div', 'flex items-center gap-3 border border-slate-200 dark:border-slate-800 rounded-lg p-3');
+            const toggle = h('button', 'relative w-11 h-6 rounded-full transition-colors ' + (r.enabled === 1 ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'));
+            toggle.innerHTML = '<span class="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ' + (r.enabled === 1 ? 'left-[22px]' : 'left-0.5') + '"></span>';
+            toggle.addEventListener('click', async () => {
+              try {
+                await api('/api/admin/mail/recipients/' + r.id + '/update', { method: 'POST', body: { enabled: r.enabled !== 1 } });
+                r.enabled = r.enabled === 1 ? 0 : 1;
+                renderList();
+              } catch (e) { toast(e.message, 'error'); }
+            });
+            el.appendChild(toggle);
+            el.appendChild(h('div', 'flex-1 text-sm truncate', esc(r.email)));
+            el.appendChild(h('span', 'text-xs text-slate-400', esc(r.created_at)));
+            const del = h('button', 'px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded', '删除');
+            del.addEventListener('click', async () => {
+              if (!confirm('删除接收邮箱 ' + r.email + '？')) return;
+              try {
+                await api('/api/admin/mail/recipients/' + r.id + '/delete', { method: 'POST' });
+                loadRecipients();
+              } catch (e) { toast(e.message, 'error'); }
+            });
+            el.appendChild(del);
+            list.appendChild(el);
+          });
+        }
+
+        async function loadRecipients() {
+          try {
+            const r = await api('/api/admin/mail/recipients');
+            recipients = r.data || [];
+            renderList();
+          } catch (e) { toast(e.message, 'error'); }
+        }
+
+        add.addEventListener('click', async () => {
+          const v = emailInput.value.trim();
+          if (!v) return;
+          try {
+            await api('/api/admin/mail/recipients/create', { method: 'POST', body: { email: v } });
+            emailInput.value = '';
+            loadRecipients();
+          } catch (e) { toast(e.message, 'error'); }
+        });
+
+        loadRecipients();
+        panelWrap.appendChild(box);
+      }
+
+      /* ============ 邮件模板 ============ */
+      function renderTemplates() {
+        const box = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
+        const typeBar = h('div', 'flex gap-2 mb-4');
+        let curType = 'alert';
+        let tplData = {};
+        const subjectInput = h('input', inp);
+        const htmlInput = h('textarea', inp + ' font-mono text-xs leading-relaxed');
+        htmlInput.rows = 18;
+
+        function renderType() {
+          typeBar.innerHTML = '';
+          ['alert', 'recover'].forEach(t => {
+            const b = h('button', 'px-4 py-2 rounded-lg text-sm font-medium ' + (t === curType ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'),
+              t === 'alert' ? '告警模板' : '恢复通知模板');
+            b.addEventListener('click', () => { curType = t; renderType(); fill(); });
+            typeBar.appendChild(b);
+          });
+        }
+
+        function fill() {
+          const t = tplData[curType];
+          if (t) { subjectInput.value = t.subject || ''; htmlInput.value = t.html || ''; }
+        }
+
+        // 变量说明
+        const varsBox = h('div', 'mb-4 text-xs text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-lg p-3');
+        varsBox.appendChild(h('div', 'font-medium text-slate-600 dark:text-slate-300 mb-1.5', '可用模板变量：'));
+        varsBox.appendChild(h('div', 'flex flex-wrap gap-2', ''));
+
+        box.appendChild(typeBar);
+        box.appendChild(varsBox);
+        box.appendChild(f('邮件主题', ''));
+        const subjectWrap = box.lastChild.lastChild;
+        subjectWrap.appendChild(subjectInput);
+        box.appendChild(f('邮件 HTML 正文', ''));
+        const htmlWrap = box.lastChild.lastChild;
+        htmlWrap.appendChild(htmlInput);
+        const actions = h('div', 'mt-5 flex flex-wrap items-center gap-3');
+        const save = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '保存模板');
+        const reset = h('button', 'px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium', '重置为默认');
+        actions.appendChild(save);
+        actions.appendChild(reset);
+        box.appendChild(actions);
+        panelWrap.appendChild(box);
+
+        api('/api/admin/mail/templates').then(r => {
+          tplData = {};
+          (r.data || []).forEach(t => tplData[t.tpl_type] = t);
+          tplVars = r.vars || [];
+          varsBox.lastChild.innerHTML = '';
+          tplVars.forEach(v => {
+            varsBox.lastChild.appendChild(h('code', 'px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300', '{{' + v.key + '}}'));
+          });
+          renderType();
+          fill();
+        });
+
+        save.addEventListener('click', async () => {
+          try {
+            await api('/api/admin/mail/templates/save', {
+              method: 'POST',
+              body: { tpl_type: curType, subject: subjectInput.value.trim(), html: htmlInput.value }
+            });
+            toast('模板已保存', 'success');
+          } catch (e) { toast(e.message, 'error'); }
+        });
+        reset.addEventListener('click', async () => {
+          if (!confirm('确定重置为默认模板？')) return;
+          try {
+            await api('/api/admin/mail/templates/reset', { method: 'POST', body: { tpl_type: curType } });
+            const r = await api('/api/admin/mail/templates');
+            tplData = {};
+            (r.data || []).forEach(t => tplData[t.tpl_type] = t);
+            fill();
+            toast('已重置为默认模板', 'success');
+          } catch (e) { toast(e.message, 'error'); }
+        });
+      }
+
+      /* 全局开关 */
+      api('/api/admin/mail/state').then(r => {
+        const on = r.data.monitorEnabled;
+        sw.classList.add(on ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700');
+        sw.innerHTML = '<span class="absolute top-1 w-5 h-5 rounded-full bg-white transition-all ' + (on ? 'left-6' : 'left-1') + '"></span>';
+      }).catch(() => {});
+      sw.addEventListener('click', async () => {
+        const currentlyOn = sw.classList.contains('bg-emerald-500');
+        try {
+          await api('/api/admin/mail/toggle-alert', { method: 'POST', body: { enabled: !currentlyOn } });
+          const on = !currentlyOn;
+          sw.classList.toggle('bg-emerald-500', on);
+          sw.classList.toggle('bg-slate-300', !on);
+          sw.innerHTML = '<span class="absolute top-1 w-5 h-5 rounded-full bg-white transition-all ' + (on ? 'left-6' : 'left-1') + '"></span>';
+          toast(on ? '告警已开启' : '告警已关闭', 'success');
+        } catch (e) { toast(e.message, 'error'); }
+      });
+
+      renderTabs();
+      renderPanel();
+    })();
+  })();
+  </script>
+</body>
+</html>

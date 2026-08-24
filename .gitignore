@@ -1,0 +1,25 @@
+# ================= 依赖 =================
+node_modules/
+
+# ============ 敏感配置（绝不提交 GitHub） ============
+# config.json 保存数据库 / SMTP 明文凭证，严禁进入版本库
+config.json
+config.local.json
+config.prod.json
+
+# ============ 运行时数据 ============
+# 安装向导临时上传目录（SQL 备份文件）
+tmp/
+# 服务日志
+logs/
+# 本地缓存
+data/cache/
+
+# ============ 日志 / 系统 ============
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.env
+.idea/
+.vscode/

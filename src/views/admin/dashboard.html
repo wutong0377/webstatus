@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>仪表盘 - WebStatus 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div id="admin-shell"></div>
+  <script src="/assets/js/common.js"></script>
+  <script>
+  (() => {
+    const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime } = WebStatus;
+
+    (async () => {
+      const main = await WebStatus.renderAdminShell('/admin/dashboard');
+      main.innerHTML = '';
+      main.appendChild(h('div', 'px-4 sm:px-6 py-6 max-w-6xl mx-auto'));
+
+      const page = main.firstChild;
+      page.appendChild(h('h1', 'text-xl font-bold mb-5', '仪表盘'));
+      const grid = h('div', 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6');
+      page.appendChild(grid);
+
+      const loading = h('div', 'text-center py-10 text-slate-400', '加载中...');
+      page.appendChild(loading);
+
+      let data;
+      try {
+        const r = await api('/api/admin/dashboard/overview');
+        data = r.data;
+      } catch (e) {
+        loading.textContent = e.message || '加载失败';
+        return;
+      }
+      loading.remove();
+
+      const c = data.counts;
+      const cards = [
+        { label: '站点总数', val: c.total, cls: 'text-slate-800 dark:text-slate-100' },
+        { label: '正常', val: c.up, cls: 'text-emerald-600 dark:text-emerald-400' },
+        { label: '卡顿', val: c.slow, cls: 'text-amber-600 dark:text-amber-400' },
+        { label: '离线', val: c.down, cls: 'text-red-600 dark:text-red-400' },
+        { label: '维修', val: c.maintenance, cls: 'text-blue-600 dark:text-blue-400' }
+      ];
+      cards.forEach(it => {
+        grid.appendChild(h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4',
+          '<div class="text-xs text-slate-400">' + it.label + '</div><div class="text-2xl font-bold tabular mt-1 ' + it.cls + '">' + it.val + '</div>'));
+      });
+
+      // 服务状态
+      const svc = data.service;
+      const svcCard = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6 flex items-center gap-3 flex-wrap');
+      svcCard.appendChild(h('span', 'w-2.5 h-2.5 rounded-full ' + (svc.running ? 'bg-emerald-500' : 'bg-red-500')));
+      svcCard.appendChild(h('span', 'text-sm font-medium', svc.running ? '巡检任务运行中' : '巡检任务已停止'));
+      svcCard.appendChild(h('span', 'text-xs text-slate-400', '上次巡检：' + esc(svc.lastRunAt || '尚未运行')));
+      if (svc.lastRun && svc.lastRun.total !== undefined) {
+        svcCard.appendChild(h('span', 'text-xs text-slate-400 tabular',
+          '本轮 ' + svc.lastRun.total + ' 站 · 正常 ' + svc.lastRun.up + ' · 卡顿 ' + svc.lastRun.slow + ' · 离线 ' + svc.lastRun.down + ' · 维修 ' + svc.lastRun.maintenance));
+      }
+      page.appendChild(svcCard);
+
+      const cols = h('div', 'grid grid-cols-1 lg:grid-cols-2 gap-5');
+      page.appendChild(cols);
+
+      // 最近故障
+      const faultBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
+      faultBox.appendChild(h('h2', 'text-sm font-semibold mb-4', '最近故障'));
+      if (!data.recentFaults.length) {
+        faultBox.appendChild(h('div', 'text-sm text-slate-400 text-center py-6', '暂无故障记录'));
+      } else {
+        data.recentFaults.forEach(f => {
+          const meta = STATUS_META[f.fault_status] || STATUS_META[0];
+          const item = h('div', 'flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0');
+          item.appendChild(h('span', 'w-2 h-2 rounded-full flex-shrink-0 ' + meta.dot));
+          const body = h('div', 'flex-1 min-w-0');
+          body.appendChild(h('div', 'text-sm font-medium truncate', esc(f.site_name)));
+          body.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(f.error_code || (f.error_msg || ''))));
+          item.appendChild(body);
+          item.appendChild(h('span', 'text-xs text-slate-400 tabular', esc(String(f.started_at).slice(5, 16))));
+          faultBox.appendChild(item);
+        });
+      }
+      cols.appendChild(faultBox);
+
+      // 最近邮件
+      const mailBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
+      mailBox.appendChild(h('h2', 'text-sm font-semibold mb-4', '最近邮件发送'));
+      if (!data.recentMails.length) {
+        mailBox.appendChild(h('div', 'text-sm text-slate-400 text-center py-6', '暂无邮件记录'));
+      } else {
+        data.recentMails.forEach(m => {
+          const item = h('div', 'flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0');
+          item.appendChild(h('span', 'w-2 h-2 rounded-full flex-shrink-0 ' + (m.status === 1 ? 'bg-emerald-500' : 'bg-red-500')));
+          const body = h('div', 'flex-1 min-w-0');
+          body.appendChild(h('div', 'text-sm truncate', esc(m.to_email)));
+          body.appendChild(h('div', 'text-xs text-slate-400',
+            (m.mail_type === 'alert' ? '告警' : m.mail_type === 'recover' ? '恢复' : '测试') +
+            (m.status === 1 ? '' : ' · ' + esc(m.error_msg || '失败'))));
+          item.appendChild(body);
+          item.appendChild(h('span', 'text-xs text-slate-400 tabular', esc(String(m.created_at).slice(5, 16))));
+          mailBox.appendChild(item);
+        });
+      }
+      cols.appendChild(mailBox);
+    })();
+  })();
+  </script>
+</body>
+</html>

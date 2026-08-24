@@ -1,0 +1,27 @@
+{
+  "app": {
+    "name": "WebStatus",
+    "port": 3000,
+    "base_url": "",
+    "session_secret": "",
+    "cookie_secure": false
+  },
+  "database": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "webstatus",
+    "password": "",
+    "database": "webstatus"
+  },
+  "smtp": {
+    "enabled": false,
+    "host": "",
+    "port": 465,
+    "secure": true,
+    "user": "",
+    "pass": "",
+    "from_name": "WebStatus",
+    "from_email": ""
+  },
+  "installed": false
+}

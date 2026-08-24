@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>安装向导 - WebStatus 网站状态监控</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body class="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+
+  <div class="max-w-3xl mx-auto px-4 py-8">
+    <!-- 品牌 -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center gap-2.5 text-blue-600">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <h1 class="text-2xl font-bold mt-2">WebStatus 网站状态监控</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">安装向导</p>
+    </div>
+
+    <!-- 步骤指示器 -->
+    <div id="steps" class="step-indicator mb-8 overflow-x-auto pb-1"></div>
+
+    <!-- 面板容器 -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8">
+      <!-- Step 1 环境自检 -->
+      <div id="step-1" class="step-panel"></div>
+      <!-- Step 2 数据库配置 -->
+      <div id="step-2" class="step-panel hidden"></div>
+      <!-- Step 3 模式选择 -->
+      <div id="step-3" class="step-panel hidden"></div>
+      <!-- Step 4 管理员 -->
+      <div id="step-4" class="step-panel hidden"></div>
+      <!-- Step 5 系统参数 -->
+      <div id="step-5" class="step-panel hidden"></div>
+      <!-- Step 6 SMTP -->
+      <div id="step-6" class="step-panel hidden"></div>
+      <!-- Step 7 完成 -->
+      <div id="step-7" class="step-panel hidden"></div>
+    </div>
+
+    <p class="text-center text-xs text-slate-400 mt-6">安装完成后 /install 路由将被永久禁用</p>
+  </div>
+
+  <script src="/assets/js/common.js"></script>
+  <script>
+  (() => {
+    const { api, esc, h, icon, toast } = WebStatus;
+    const STEPS = ['环境检查', '数据库', '模式选择', '管理员', '系统参数', 'SMTP', '完成'];
+    const panels = {};
+    let currentStep = 1;
+    let dbInfo = { host: '127.0.0.1', port: 3306, user: '', password: '', database: 'webstatus' };
+    let smtpInfo = { enabled: false, host: '', port: 465, secure: true, user: '', pass: '', from_name: 'WebStatus', from_email: '' };
+    let uploaded = null; // { path(session) }
+
+    /* ---------- 步骤指示器 ---------- */
+    function renderSteps() {
+      const wrap = document.getElementById('steps');
+      wrap.innerHTML = '';
+      STEPS.forEach((label, i) => {
+        const n = i + 1;
+        const dot = h('div', 'step-dot' + (n === currentStep ? ' active' : (n < currentStep ? ' done' : '')));
+        dot.textContent = n < currentStep ? '✓' : n;
+        wrap.appendChild(dot);
+        const text = h('div', 'text-[11px] whitespace-nowrap mt-1 text-center' + (n === currentStep ? ' text-slate-900 dark:text-slate-100 font-medium' : ' text-slate-400'), label);
+        const cell = h('div', 'flex flex-col items-center');
+        cell.appendChild(dot);
+        cell.appendChild(text);
+        wrap.appendChild(cell);
+        if (n < STEPS.length) wrap.appendChild(h('div', 'step-line' + (n < currentStep ? ' done' : '')));
+      });
+    }
+
+    function go(n) {
+      Object.keys(panels).forEach(k => panels[k].classList.add('hidden'));
+      panels[n].classList.remove('hidden');
+      currentStep = n;
+      renderSteps();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ---------- 表单辅助 ---------- */
+    function field(label, inputHtml) {
+      const w = h('div', '');
+      w.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', label));
+      const wrap = h('div', '');
+      wrap.innerHTML = inputHtml;
+      w.appendChild(wrap);
+      return w;
+    }
+    const inputCls = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
+    const btnPrimary = 'w-full px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium hover:opacity-90 disabled:opacity-50';
+    const btnGhost = 'px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800';
+
+    /* ============ Step 1 环境自检 ============ */
+    async function initStep1() {
+      const panel = panels[1];
+      panel.innerHTML = '<div class="text-center py-6 text-slate-400">正在检查运行环境...</div>';
+      const r = await api('/install/api/check').catch(() => ({ code: -1 }));
+      panel.innerHTML = '';
+      const items = [
+        { ok: r.nodeOk, label: 'Node.js 版本', value: r.node + (r.nodeOk ? '' : '（需要 ≥16）') },
+        { ok: r.schemaFile, label: '数据库结构文件 schema.sql', value: r.schemaFile ? '已找到' : '缺失' },
+        { ok: r.tmpWritable, label: '临时上传目录可写', value: r.tmpWritable ? '可写' : '不可写' },
+        { ok: r.rootWritable, label: '项目根目录可写（config.json）', value: r.rootWritable ? '可写' : '不可写' }
+      ];
+      items.forEach(it => {
+        panel.appendChild(h('div', 'flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0',
+          '<span class="' + (it.ok ? 'text-emerald-500' : 'text-red-500') + '">' +
+          (it.ok
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>') +
+          '</span><div class="flex-1 min-w-0"><div class="text-sm font-medium">' + esc(it.label) + '</div><div class="text-xs text-slate-400">' + esc(it.value) + '</div></div>'));
+      });
+      const btn = h('button', 'mt-6 ' + btnPrimary);
+      btn.textContent = r.ok ? '通过，下一步' : '环境异常，请先修复（仍可重试检查）';
+      btn.addEventListener('click', () => r.ok ? go(2) : initStep1());
+      panel.appendChild(btn);
+    }
+
+    /* ============ Step 2 数据库配置 ============ */
+    function initStep2() {
+      const panel = panels[2];
+      panel.innerHTML = '';
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '数据库连接配置'));
+      panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '填写 MySQL 连接信息，建议使用低权限账号（不要用 root）。'));
+      const form = h('div', 'space-y-4');
+      form.appendChild(field('数据库主机', `<input id="db-host" class="${inputCls}" value="${esc(dbInfo.host)}">`));
+      const portRow = h('div', 'grid grid-cols-2 gap-4');
+      portRow.appendChild(field('端口', `<input id="db-port" class="${inputCls}" value="${esc(dbInfo.port)}">`));
+      portRow.appendChild(field('数据库名', `<input id="db-name" class="${inputCls}" value="${esc(dbInfo.database)}">`));
+      form.appendChild(portRow);
+      form.appendChild(field('用户名', `<input id="db-user" class="${inputCls}" value="${esc(dbInfo.user)}" autocomplete="off">`));
+      form.appendChild(field('密码', `<input id="db-pass" type="password" class="${inputCls}" value="" autocomplete="new-password">`));
+      panel.appendChild(form);
+      const msg = h('div', 'mt-4 text-sm hidden');
+      msg.id = 'db-msg';
+      panel.appendChild(msg);
+      const btn = h('button', 'mt-6 ' + btnPrimary);
+      btn.textContent = '测试连接并继续';
+      btn.addEventListener('click', async () => {
+        dbInfo = {
+          host: document.getElementById('db-host').value.trim(),
+          port: Number(document.getElementById('db-port').value) || 3306,
+          user: document.getElementById('db-user').value.trim(),
+          password: document.getElementById('db-pass').value,
+          database: document.getElementById('db-name').value.trim() || 'webstatus'
+        };
+        btn.disabled = true; btn.textContent = '连接测试中...';
+        msg.classList.remove('hidden', 'text-emerald-600', 'text-red-600');
+        try {
+          const r = await api('/install/api/test-db', { method: 'POST', body: dbInfo });
+          msg.textContent = '连接成功 · MySQL ' + r.version + (r.dbExists ? ' · 数据库已存在' : ' · 数据库不存在（初始化时自动创建）');
+          msg.classList.add('text-emerald-600');
+          btn.disabled = false; btn.textContent = '测试连接并继续';
+          go(3);
+        } catch (e) {
+          msg.textContent = e.message;
+          msg.classList.add('text-red-600');
+          btn.disabled = false; btn.textContent = '测试连接并继续';
+        }
+      });
+      panel.appendChild(btn);
+    }
+
+    /* ============ Step 3 模式选择 ============ */
+    function initStep3() {
+      const panel = panels[3];
+      panel.innerHTML = '';
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '数据库初始化模式'));
+      panel.appendChild(h('p', 'text-sm text-slate-400 mb-6', '二选一，决定目标数据库如何处理。'));
+      const grid = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+
+      // 模式 A
+      const cardA = h('div', 'border border-slate-200 dark:border-slate-700 rounded-xl p-5 flex flex-col');
+      cardA.innerHTML = '<div class="text-blue-600 mb-3">' + icon('database', 'w-8 h-8') + '</div><h3 class="font-semibold">模式 A：全新初始化</h3>' +
+        '<p class="text-sm text-slate-400 mt-1.5 flex-1">自动创建数据表、初始化系统参数。适合首次部署。</p>';
+      const btnA = h('button', 'mt-4 px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium hover:opacity-90');
+      btnA.textContent = '选择全新初始化';
+      btnA.addEventListener('click', () => doInitA(btnA));
+      cardA.appendChild(btnA);
+      grid.appendChild(cardA);
+
+      // 模式 B
+      const cardB = h('div', 'border border-slate-200 dark:border-slate-700 rounded-xl p-5 flex flex-col');
+      cardB.innerHTML = '<div class="text-emerald-600 mb-3">' + icon('restore', 'w-8 h-8') + '</div><h3 class="font-semibold">模式 B：上传备份恢复</h3>' +
+        '<p class="text-sm text-slate-400 mt-1.5 flex-1">上传以往导出的 .sql 备份文件，恢复历史数据与全部配置。</p>';
+      const btnB = h('button', 'mt-4 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800');
+      btnB.textContent = '选择恢复备份';
+      btnB.addEventListener('click', () => initStep3B(panel, grid));
+      cardB.appendChild(btnB);
+      grid.appendChild(cardB);
+      panel.appendChild(grid);
+    }
+
+    /* 模式 B 面板（上传 + 风险确认 + 导入） */
+    function initStep3B(panel, grid) {
+      grid.remove();
+      panel.innerHTML = '';
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '模式 B：上传 SQL 备份恢复'));
+      panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '仅接受本系统导出的 .sql 备份文件，最大 16MB。'));
+      const back = h('button', 'mb-4 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 inline-flex items-center gap-1',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>返回');
+      back.addEventListener('click', initStep3);
+      panel.appendChild(back);
+
+      const fileWrap = h('div', 'border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 text-center');
+      fileWrap.id = 'drop';
+      fileWrap.innerHTML = '<div class="text-slate-400 mb-2">' + icon('upload', 'w-10 h-10 mx-auto') + '</div><p class="text-sm text-slate-500">点击选择或拖入 .sql 文件</p>';
+      const fileInput = h('input', 'hidden');
+      fileInput.type = 'file';
+      fileInput.accept = '.sql';
+      fileWrap.appendChild(fileInput);
+      fileWrap.addEventListener('click', () => fileInput.click());
+      fileWrap.addEventListener('dragover', e => { e.preventDefault(); fileWrap.classList.add('border-blue-500'); });
+      fileWrap.addEventListener('dragleave', () => fileWrap.classList.remove('border-blue-500'));
+      fileWrap.addEventListener('drop', e => {
+        e.preventDefault();
+        fileWrap.classList.remove('border-blue-500');
+        if (e.dataTransfer.files.length) fileInput.files = e.dataTransfer.files;
+      });
+      panel.appendChild(fileWrap);
+
+      const info = h('div', 'mt-4 text-sm hidden');
+      info.id = 'upload-info';
+      panel.appendChild(info);
+
+      // 风险确认
+      const risk = h('label', 'mt-5 flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 cursor-pointer hidden');
+      risk.id = 'risk-box';
+      const cb = h('input', 'mt-0.5');
+      cb.type = 'checkbox';
+      cb.className = 'accent-red-600';
+      risk.appendChild(cb);
+      const riskText = h('div', 'text-xs text-red-700 dark:text-red-400');
+      riskText.textContent = '我已知晓：导入备份会清空目标数据库中的全部现有数据，仅支持本系统导出的备份文件，请务必提前手动备份。';
+      risk.appendChild(riskText);
+      panel.appendChild(risk);
+
+      const btn = h('button', 'mt-5 ' + btnPrimary + ' hidden');
+      btn.id = 'restore-btn';
+      btn.textContent = '开始导入恢复';
+      btn.addEventListener('click', () => doRestore(btn));
+      panel.appendChild(btn);
+
+      fileInput.addEventListener('change', async () => {
+        const f = fileInput.files[0];
+        if (!f) return;
+        if (!/\.sql$/i.test(f.name)) { toast('仅支持 .sql 文件', 'error'); return; }
+        const fd = new FormData();
+        fd.append('backup', f);
+        info.classList.remove('hidden');
+        info.textContent = '上传中...';
+        info.classList.add('text-slate-500');
+        try {
+          const r = await api('/install/api/upload-backup', { method: 'POST', body: fd });
+          uploaded = true;
+          info.classList.remove('text-slate-500');
+          info.classList.add('text-emerald-600');
+          info.textContent = '已上传：' + r.originalName + '（' + WebStatus.fmtBytes(r.size) + '）' + (r.isSystemBackup ? ' · 校验通过' : ' · 警告：未能识别为本系统备份，导入将被拒绝');
+          risk.classList.remove('hidden');
+          btn.classList.remove('hidden');
+          if (!r.isSystemBackup) { btn.disabled = true; }
+        } catch (e) {
+          info.classList.remove('text-slate-500');
+          info.classList.add('text-red-600');
+          info.textContent = e.message;
+        }
+      });
+    }
+
+    async function doInitA(btn) {
+      btn.disabled = true; btn.textContent = '初始化中...';
+      try {
+        await api('/install/api/init-db', { method: 'POST', body: dbInfo });
+        toast('数据库初始化成功', 'success');
+        go(4);
+      } catch (e) {
+        toast(e.message, 'error');
+        btn.disabled = false; btn.textContent = '选择全新初始化';
+      }
+    }
+
+    async function doRestore(btn) {
+      btn.disabled = true; btn.textContent = '导入中，请稍候...';
+      try {
+        await api('/install/api/restore-db', { method: 'POST', body: { ...dbInfo, confirmRisk: true } });
+        toast('备份恢复成功，历史数据已导入', 'success');
+        go(7);
+      } catch (e) {
+        toast(e.message, 'error');
+        btn.disabled = false; btn.textContent = '开始导入恢复';
+      }
+    }
+
+    /* ============ Step 4 管理员 ============ */
+    function initStep4() {
+      const panel = panels[4];
+      panel.innerHTML = '';
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '创建管理员账号'));
+      panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '用于登录后台管理系统。密码将使用 bcrypt 加密存储。'));
+      const form = h('div', 'space-y-4');
+      form.appendChild(field('用户名', `<input id="ad-user" class="${inputCls}" placeholder="3-50 个字符">`));
+      form.appendChild(field('密码', `<input id="ad-pass" type="password" class="${inputCls}" placeholder="至少 6 位">`));
+      form.appendChild(field('确认密码', `<input id="ad-pass2" type="password" class="${inputCls}">`));
+      panel.appendChild(form);
+      const msg = h('div', 'mt-4 text-sm text-red-600 hidden');
+      msg.id = 'admin-msg';
+      panel.appendChild(msg);
+      const btn = h('button', 'mt-6 ' + btnPrimary);
+      btn.textContent = '创建账号，下一步';
+      btn.addEventListener('click', async () => {
+        const u = document.getElementById('ad-user').value.trim();
+        const p = document.getElementById('ad-pass').value;
+        const p2 = document.getElementById('ad-pass2').value;
+        if (!u || p.length < 6) { msg.textContent = '请填写用户名（≥3字符）和密码（≥6位）'; msg.classList.remove('hidden'); return; }
+        if (p !== p2) { msg.textContent = '两次输入的密码不一致'; msg.classList.remove('hidden'); return; }
+        btn.disabled = true; btn.textContent = '创建中...';
+        try {
+          await api('/install/api/setup-admin', { method: 'POST', body: { ...dbInfo, username: u, password: p } });
+          go(5);
+        } catch (e) { msg.textContent = e.message; msg.classList.remove('hidden'); btn.disabled = false; btn.textContent = '创建账号，下一步'; }
+      });
+      panel.appendChild(btn);
+    }
+
+    /* ============ Step 5 系统参数 ============ */
+    function initStep5() {
+      const panel = panels[5];
+      panel.innerHTML = '';
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', '系统参数配置'));
+      panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '以下参数后期可在后台「系统设置」中修改。'));
+      const defaults = {
+        slow_threshold: { label: '卡顿延迟阈值(ms)', val: 1500 },
+        check_interval: { label: '巡检间隔(秒)', val: 60 },
+        alert_streak: { label: '抖动抑制(连续N次异常才告警)', val: 3 },
+        alert_cooldown: { label: '邮件告警冷却(秒)', val: 30 },
+        history_retention_days: { label: '历史数据保留(天)', val: 30 },
+        log_retention_days: { label: '日志保留(天)', val: 30 },
+        cache_ttl: { label: '公开缓存 TTL(秒)', val: 5 },
+        frontend_refresh: { label: '前端刷新间隔(秒)', val: 30 }
+      };
+      const form = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+      Object.keys(defaults).forEach(k => {
+        const d = defaults[k];
+        const input = `<input id="par-${k}" type="number" class="${inputCls}" value="${d.val}" min="1">`;
+        form.appendChild(field(d.label, input));
+      });
+      panel.appendChild(form);
+      const msg = h('div', 'mt-4 text-sm text-red-600 hidden');
+      msg.id = 'param-msg';
+      panel.appendChild(msg);
+      const row = h('div', 'mt-6 flex items-center justify-between gap-3');
+      const backBtn = h('button', btnGhost, '上一步');
+      backBtn.addEventListener('click', () => go(4));
+      const btn = h('button', 'flex-1 sm:flex-none ' + btnPrimary);
+      btn.textContent = '保存参数，下一步';
+      btn.addEventListener('click', async () => {
+        const body = { ...dbInfo };
+        Object.keys(defaults).forEach(k => {
+          body[k] = Number(document.getElementById('par-' + k).value) || defaults[k].val;
+        });
+        btn.disabled = true; btn.textContent = '保存中...';
+        try {
+          await api('/install/api/save-params', { method: 'POST', body });
+          go(6);
+        } catch (e) { msg.textContent = e.message; msg.classList.remove('hidden'); btn.disabled = false; btn.textContent = '保存参数，下一步'; }
+      });
+      row.appendChild(backBtn);
+      row.appendChild(btn);
+      panel.appendChild(row);
+    }
+
+    /* ============ Step 6 SMTP（可选） ============ */
+    function initStep6() {
+      const panel = panels[6];
+      panel.innerHTML = '';
+      panel.appendChild(h('h2', 'text-lg font-bold mb-1', 'SMTP 邮件配置（可选）'));
+      panel.appendChild(h('p', 'text-sm text-slate-400 mb-5', '用于发送状态告警邮件。可在后台随时修改，也可跳过。'));
+      const form = h('div', 'space-y-4');
+      const toggle = h('label', 'flex items-center gap-3 cursor-pointer');
+      const cb = h('input', '');
+      cb.type = 'checkbox';
+      cb.className = 'accent-blue-600 w-4 h-4';
+      cb.id = 'smtp-enable';
+      cb.checked = smtpInfo.enabled;
+      toggle.appendChild(cb);
+      toggle.appendChild(h('span', 'text-sm font-medium', '启用 SMTP 邮件告警'));
+      form.appendChild(toggle);
+      const grid = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+      grid.appendChild(field('SMTP 服务器', `<input id="sm-host" class="${inputCls}" value="${esc(smtpInfo.host)}">`));
+      grid.appendChild(field('端口', `<input id="sm-port" type="number" class="${inputCls}" value="${esc(smtpInfo.port)}">`));
+      form.appendChild(grid);
+      const secureRow = h('div', 'flex items-center gap-6');
+      const secLabel = h('label', 'flex items-center gap-3 cursor-pointer');
+      const secCb = h('input', '');
+      secCb.type = 'checkbox';
+      secCb.className = 'accent-blue-600 w-4 h-4';
+      secCb.id = 'sm-secure';
+      secCb.checked = smtpInfo.secure;
+      secLabel.appendChild(secCb);
+      secLabel.appendChild(h('span', 'text-sm font-medium', 'SSL/TLS 加密（465 端口）'));
+      secureRow.appendChild(secLabel);
+      form.appendChild(secureRow);
+      form.appendChild(field('发件账号', `<input id="sm-user" class="${inputCls}" value="${esc(smtpInfo.user)}">`));
+      form.appendChild(field('发件密码 / 授权码', `<input id="sm-pass" type="password" class="${inputCls}">`));
+      grid2 = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+      grid2.appendChild(field('发件人名称', `<input id="sm-from-name" class="${inputCls}" value="${esc(smtpInfo.from_name)}">`));
+      grid2.appendChild(field('发件邮箱', `<input id="sm-from-email" class="${inputCls}" value="${esc(smtpInfo.from_email)}">`));
+      form.appendChild(grid2);
+      panel.appendChild(form);
+      const row = h('div', 'mt-6 flex items-center justify-between gap-3');
+      const backBtn = h('button', btnGhost, '上一步');
+      backBtn.addEventListener('click', () => go(5));
+      const skipBtn = h('button', btnGhost, '跳过此步');
+      const nextBtn = h('button', 'flex-1 sm:flex-none ' + btnPrimary);
+      nextBtn.textContent = '保存并继续';
+      nextBtn.addEventListener('click', async () => {
+        smtpInfo = {
+          enabled: document.getElementById('smtp-enable').checked,
+          host: document.getElementById('sm-host').value.trim(),
+          port: Number(document.getElementById('sm-port').value) || 465,
+          secure: document.getElementById('sm-secure').checked,
+          user: document.getElementById('sm-user').value.trim(),
+          pass: document.getElementById('sm-pass').value,
+          from_name: document.getElementById('sm-from-name').value.trim() || 'WebStatus',
+          from_email: document.getElementById('sm-from-email').value.trim()
+        };
+        nextBtn.disabled = true; nextBtn.textContent = '保存中...';
+        try {
+          await api('/install/api/save-smtp', { method: 'POST', body: { smtp: smtpInfo } });
+          go(7);
+        } catch (e) { toast(e.message, 'error'); nextBtn.disabled = false; nextBtn.textContent = '保存并继续'; }
+      });
+      skipBtn.addEventListener('click', () => {
+        smtpInfo = { ...smtpInfo, enabled: false };
+        go(7);
+      });
+      row.appendChild(backBtn);
+      row.appendChild(skipBtn);
+      row.appendChild(nextBtn);
+      panel.appendChild(row);
+    }
+
+    /* ============ Step 7 完成 ============ */
+    function initStep7() {
+      const panel = panels[7];
+      panel.innerHTML = '';
+      panel.appendChild(h('div', 'text-center py-6',
+        '<div class="text-emerald-500 mb-4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 mx-auto"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
+        '<h2 class="text-xl font-bold">即将完成安装</h2>' +
+        '<p class="text-sm text-slate-400 mt-2">系统将生成 config.json 配置文件，安装完成后 /install 路由永久禁用。</p>'));
+      const summary = h('div', 'mt-6 space-y-2 text-sm bg-slate-50 dark:bg-slate-800 rounded-xl p-4');
+      summary.innerHTML =
+        '<div class="flex justify-between"><span class="text-slate-400">数据库</span><span class="font-mono">' + esc(dbInfo.database) + '</span></div>' +
+        '<div class="flex justify-between"><span class="text-slate-400">主机</span><span class="font-mono">' + esc(dbInfo.host + ':' + dbInfo.port) + '</span></div>' +
+        '<div class="flex justify-between"><span class="text-slate-400">SMTP</span><span class="font-mono">' + (smtpInfo.enabled ? esc(smtpInfo.host) : '未启用') + '</span></div>';
+      panel.appendChild(summary);
+      const row = h('div', 'mt-6 flex items-center justify-between gap-3');
+      if (smtpInfo.enabled !== undefined) {
+        const backBtn = h('button', btnGhost, '上一步');
+        backBtn.addEventListener('click', () => go(6));
+        row.appendChild(backBtn);
+      }
+      const btn = h('button', 'flex-1 sm:flex-none ' + btnPrimary);
+      btn.textContent = '完成安装';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true; btn.textContent = '正在生成配置...';
+        try {
+          await api('/install/api/finish', { method: 'POST', body: { db: dbInfo, smtp: smtpInfo } });
+          panel.innerHTML = '';
+          panel.appendChild(h('div', 'text-center py-10',
+            '<div class="text-blue-500 mb-4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-16 h-16 mx-auto"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>' +
+            '<h2 class="text-xl font-bold">安装完成</h2>' +
+            '<p class="text-sm text-slate-400 mt-2 max-w-md mx-auto">请重启服务（pm2 restart webstatus 或重新运行 npm start），然后访问后台登录页。</p>' +
+            '<div class="mt-6"><a href="/admin/login" class="px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium">重启后前往登录</a></div>'));
+        } catch (e) {
+          toast(e.message, 'error');
+          btn.disabled = false; btn.textContent = '完成安装';
+        }
+      });
+      row.appendChild(btn);
+      panel.appendChild(row);
+    }
+
+    /* ---------- 初始化 ---------- */
+    STEPS.forEach((_, i) => panels[i + 1] = document.getElementById('step-' + (i + 1)));
+    renderSteps();
+    initStep1();
+    initStep2();
+    initStep3();
+    initStep4();
+    initStep5();
+    initStep6();
+    initStep7();
+  })();
+  </script>
+</body>
+</html>
