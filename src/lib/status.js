@@ -17,8 +17,13 @@ const STATUS = {
 
 const STATUS_TEXT = { 1: '正常', 2: '卡顿', 3: '离线', 4: '维修' };
 
-/** 根据探测结果与卡顿阈值判定状态 */
-function judgeStatus(probe, slowThresholdMs) {
+/**
+ * 根据探测结果与卡顿阈值判定状态
+ * @param {object} probe 探测结果
+ * @param {number} slowThresholdMs 卡顿阈值
+ * @param {number|null} expectedStatus 自定义期望 HTTP 状态码（v1.1，可为 null）
+ */
+function judgeStatus(probe, slowThresholdMs, expectedStatus) {
   if (!probe.ok) {
     return {
       status: STATUS.DOWN,
@@ -27,7 +32,22 @@ function judgeStatus(probe, slowThresholdMs) {
       errorMsg: probe.errorMsg || '探测失败'
     };
   }
-  // HTTP 4xx / 5xx 视为离线（对探测请求而言该服务不可用）
+  // 自定义期望状态码（不限于 200，如期望 302/401 等）
+  if (expectedStatus && Number(expectedStatus) > 0) {
+    if (probe.httpCode !== Number(expectedStatus)) {
+      return {
+        status: STATUS.DOWN,
+        httpCode: probe.httpCode,
+        errorCode: 'HTTP_' + probe.httpCode,
+        errorMsg: 'HTTP 状态码不符合期望(' + expectedStatus + ')，实际: ' + probe.httpCode
+      };
+    }
+    if (probe.delay >= Number(slowThresholdMs)) {
+      return { status: STATUS.SLOW, httpCode: probe.httpCode, errorCode: '', errorMsg: '' };
+    }
+    return { status: STATUS.UP, httpCode: probe.httpCode, errorCode: '', errorMsg: '' };
+  }
+  // 默认：HTTP 4xx / 5xx 视为离线
   if (probe.httpCode >= 400) {
     return {
       status: STATUS.DOWN,

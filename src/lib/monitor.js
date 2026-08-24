@@ -11,11 +11,13 @@
  *   - 维修模式站点完全跳过探测与告警，强制蓝色状态。
  */
 const { query } = require('../db');
-const { httpProbe } = require('./probe');
+const { httpProbe, tcpProbe } = require('./probe');
 const { ping } = require('./ping');
 const { judgeStatus, STATUS } = require('./status');
 const settingsSvc = require('./settings');
 const mailer = require('./mailer');
+const alert = require('./alert');
+const { checkDns, checkCert, saveCertCheck } = require('./checks');
 const { formatDateTime } = require('../utils/time');
 
 const CONCURRENCY = 3;        // 最大并发探测数
@@ -123,7 +125,7 @@ async function checkSite(site, settings, result) {
     // 异步补充 ping 延迟参考，失败不影响结果
     ping(site.domain).catch(() => {});
   }
-  const judged = judgeStatus(probe, settings.slow_threshold);
+  const judged = judgeStatus(probe, settings.slow_threshold, site.expected_status);
   if (judged.status === STATUS.DOWN) result.down++;
   else if (judged.status === STATUS.SLOW) result.slow++;
   else result.up++;
@@ -135,6 +137,63 @@ async function checkSite(site, settings, result) {
   );
 
   await processState(site, judged, probe, settings);
+
+  // v1.1 增强检测（证书/DNS/端口），与主状态解耦，异常走统一告警
+  await runEnhanceChecks(site).catch(() => {});
+}
+
+/**
+ * 增强检测：SSL 证书、DNS 记录、TCP 端口
+ * 按站点配置执行，结果写入对应表，异常通过统一告警通知。
+ */
+async function runEnhanceChecks(site) {
+  // SSL 证书检测
+  if (Number(site.check_cert) === 1) {
+    const cert = await checkCert(site);
+    await saveCertCheck(site, cert);
+    if (cert.status !== 1) {
+      await alert.sendAlert({
+        site,
+        alertType: 'cert',
+        level: cert.status === 3 ? 3 : 2,
+        title: '【SSL证书告警】' + site.name + ' ' + cert.errorMsg,
+        content: '站点 <strong>' + site.name + '</strong>（' + site.domain + '）<br>证书异常：' + cert.errorMsg +
+          '<br>签发机构：' + cert.issuer + '<br>有效期至：' + (cert.validTo || '-') + '<br>剩余：' + cert.daysLeft + ' 天'
+      });
+    }
+  }
+
+  // DNS 记录监控
+  if (Number(site.check_dns) === 1) {
+    const results = await checkDns(site);
+    const bad = results.filter(r => !r.ok);
+    if (bad.length) {
+      await alert.sendAlert({
+        site,
+        alertType: 'dns',
+        level: 3,
+        title: '【DNS异常】' + site.name,
+        content: '站点 <strong>' + site.name + '</strong>（' + site.domain + '）<br>DNS 记录与规则不符：' +
+          bad.map(r => r.type + '：' + (r.error || ('期望 [' + r.expected.join(', ') + ']，实际 [' + r.actual.join(', ') + ']'))).join('<br>')
+      });
+    }
+  }
+
+  // TCP 端口连通检测
+  if (Number(site.check_tcp) === 1 && site.tcp_port) {
+    let host;
+    try { host = new URL(site.domain).hostname; } catch (e) { host = site.domain; }
+    const tcp = await tcpProbe(host, Number(site.tcp_port));
+    if (!tcp.ok) {
+      await alert.sendAlert({
+        site,
+        alertType: 'tcp',
+        level: 3,
+        title: '【端口异常】' + site.name + ':' + site.tcp_port,
+        content: '端口 ' + host + ':' + site.tcp_port + ' 连接失败：' + tcp.errorMsg
+      });
+    }
+  }
 }
 
 /** 抖动抑制 + 故障记录 + 告警逻辑 */

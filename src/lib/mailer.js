@@ -145,4 +145,17 @@ async function sendTestEmail(toEmail) {
   }
 }
 
-module.exports = { createTransporter, getTransporter, sendAlert, sendRecover, sendTestEmail, sendToRecipients };
+/** 发送自定义邮件（证书/DNS/端口等通用告警使用） */
+async function sendGeneric(site, opts) {
+  const { subject, html, mailType } = opts;
+  const settings = await settingsSvc.getAll();
+  if (!settings.monitor_enabled) return;
+  if (!config.smtp.enabled || !transporter) return;
+  const recipients = await getEnabledRecipients();
+  if (!recipients.length) return;
+  for (const r of recipients) {
+    enqueue({ to: r.email, mailType: mailType || 'alert', options: { from: sender(), to: r.email, subject, html } });
+  }
+}
+
+module.exports = { createTransporter, getTransporter, sendAlert, sendRecover, sendTestEmail, sendGeneric, sendToRecipients };
