@@ -391,6 +391,14 @@ git push -u origin main
 
 > ⚠️ 推送前请确认 `config.json` **不在**待提交列表（应被 `.gitignore` 忽略）；如误提交，请用 `git rm --cached config.json` 移除。
 
+## 可选功能：OCSP 证书吊销检测
+
+站点后台可开启「OCSP 吊销检测」。该功能依赖可选的 `ocsp` npm 包（国内网络可能安装困难，故不纳入默认依赖）：
+```bash
+npm install ocsp
+```
+安装后重启服务即启用；未安装时该项检测自动跳过，不影响其他功能。
+
 ## 已知局限
 
 - **Ping 权限**：系统通过调用系统 `ping` 命令获取延迟。部分环境（容器内无 ping 二进制、或进程无相关权限）会导致 ping 失败——属正常现象，系统会以 HTTP 探测结果为准；
