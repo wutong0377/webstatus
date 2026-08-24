@@ -135,8 +135,8 @@ nginx -t && systemctl reload nginx
 5. **站点设置 → 伪静态**：粘贴下方「宝塔伪静态规则」
 6. **SSL**：设置 → SSL → Let's Encrypt 申请（`*.`通配符选 **DNS 验证**，去域名商加 TXT 记录）
 7. 访问 `你的域名/install`：填数据库信息 → 选 **模式 A 全新初始化** → 建管理员 → 完成
-8. 回 **Node项目** 点「重启」
-9. 编辑 `config.json`，在 `app` 里加 `"trust_proxy": true`、`"cookie_secure": true`，再重启
+8. ⚠️ **必须重启**：回「Node项目」点「重启」——安装完成生成 `config.json` 后，**不重启则 `/install` 不会失效、后台也进不去**
+9. 编辑 `config.json`，在 `app` 里加 `"trust_proxy": true`、`"cookie_secure": true`，**再重启一次**让配置生效
 10. 访问 `你的域名/admin/login` 登录，添加站点开始监控
 
 ### 宝塔伪静态规则（网站 → 设置 → 伪静态 整段粘贴）
