@@ -69,6 +69,9 @@ if (!config.installed) {
   const { createPool } = require('./db');
   createPool(config.database);
 
+  // 数据库迁移（旧库自动升级，向下兼容）
+  require('./db/migrate').migrate().catch(e => console.error('[migrate] 数据库迁移失败:', e.message));
+
   // 初始化 SMTP transporter（未启用 SMTP 时无害，发送前仍会校验 enabled）
   require('./lib/mailer').createTransporter();
 
