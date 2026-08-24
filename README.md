@@ -170,13 +170,6 @@ location ~* \.(sql|log|env)$ { deny all; }
 location ~ /\. { deny all; }
 ```
 
-### 常见坑
-
-- **Let's Encrypt 报 `X509Req` 错误**：宝塔面板 Python 库坏了，SSH 执行
-  `cd /www/server/panel/pyenv/bin && ./python -m pip install --upgrade pyOpenSSL cryptography`，再 `bt` 输入 `11` 重启面板；
-- **管理员步骤报「数据库密码错误」**：代码太旧，请更新到最新代码；
-- **安装完必须重启 Node 进程**，否则 `/install` 不失效。
-
 > 完整反向代理配置见 [`deploy/nginx.conf`](deploy/nginx.conf)；伪静态专用文件见 [`deploy/bt-pseudo-static.conf`](deploy/bt-pseudo-static.conf)。
 
 ## SMTP 邮件告警配置
