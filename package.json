@@ -1,6 +1,6 @@
 {
   "name": "webstatus",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "网站状态监控 WebStatus - 开源自托管网站状态监控系统 (Node.js + Express + MySQL)",
   "main": "src/server.js",
   "scripts": {

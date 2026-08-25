@@ -7,7 +7,7 @@
   <meta name="description" content="WebStatus 网站状态监控 - 站点实时状态、延迟曲线与故障记录">
   <meta name="keywords" content="WebStatus,网站状态监控,uptime,status">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.5.1">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.5.2">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -55,10 +55,10 @@
         <div class="mt-2 text-center text-xs text-slate-400" data-i18n="site.chartHint">响应耗时（ms），颜色对应状态</div>
       </div>
 
-      <!-- 状态时间线 -->
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+      <!-- 状态时间线（固定高度，滚轮滚动） -->
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 flex flex-col">
         <h2 class="font-semibold text-sm mb-4" data-i18n="site.timelineTitle">状态时间线</h2>
-        <div id="timeline" class="timeline text-sm"></div>
+        <div id="timeline" class="timeline text-sm max-h-[300px] overflow-y-auto pr-1 flex-1"></div>
         <div id="timeline-empty" class="hidden text-center text-slate-400 text-sm py-8" data-i18n="site.timelineEmpty">该时间段内暂无状态记录</div>
       </div>
     </div>
@@ -70,10 +70,10 @@
       <div id="blocks-grid" class="space-y-1"></div>
     </div>
 
-    <!-- 故障记录 -->
+    <!-- 故障记录（固定高度，滚轮滚动） -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
       <h2 class="font-semibold text-sm mb-4" data-i18n="site.faultTitle">故障记录</h2>
-      <div id="fault-list" class="space-y-2.5"></div>
+      <div id="fault-list" class="space-y-2.5 max-h-[360px] overflow-y-auto pr-1"></div>
       <div id="fault-empty" class="hidden text-center text-slate-400 text-sm py-8" data-i18n="site.faultEmpty">暂无历史故障</div>
     </div>
   </main>
@@ -82,7 +82,7 @@
     <div id="ws-copyright"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.5.1"></script>
+  <script src="/assets/js/common.js?v=2.5.2"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
