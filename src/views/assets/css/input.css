@@ -18,7 +18,19 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* 避免点击页面文字出现"输入线"(文本选中光标)，输入框仍可选中 */
+  -webkit-user-select: none;
+  user-select: none;
 }
+
+input, textarea, select, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 点击不显示多余聚焦框；键盘导航仍显示焦点 */
+a:focus, button:focus { outline: none; }
+a:focus-visible, button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
 
 /* 表格横向滚动容器（移动端） */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }

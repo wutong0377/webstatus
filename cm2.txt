@@ -1,0 +1,6 @@
+fix(v2.5.1): 修复主页文字点击输入线 + 子域名识别主域到期时间
+
+- 主页文字点击出现"输入线": 全局 user-select:none(输入框仍可选中),
+  点击不显示多余聚焦框, 键盘导航 focus-visible 仍显示
+- 域名检测: 二级/三级乃至多级子域自动提取可注册主域(eTLD+1)再查询,
+  如 www.robforum.xyz 查 robforum.xyz, 兼容 com.cn/co.uk 等多段后缀

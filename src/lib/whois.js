@@ -45,6 +45,26 @@ function tldOf(domain) {
   return labels[labels.length - 1];
 }
 
+/** 常见多段公共后缀（用于识别可注册主域 eTLD+1） */
+const TWO_PART_SUFFIX = ['com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn', 'com.hk', 'com.tw', 'com.sg', 'co.jp', 'co.uk', 'org.uk', 'com.au', 'com.br', 'com.mx', 'co.za', 'com.tr', 'com.vn', 'com.my', 'com.ph', 'com.ng', 'com.ke', 'com.sa', 'com.ar', 'com.co', 'com.mx', 'com.in', 'co.in', 'net.in'];
+
+/**
+ * 提取可注册主域（eTLD+1）：
+ * 二级/三级乃至多级子域都应识别其主域的到期时间。
+ * 如 www.robforum.xyz → robforum.xyz；a.b.example.com.cn → example.com.cn
+ */
+function registrableDomain(host) {
+  const labels = String(host || '').toLowerCase().replace(/\.$/, '').split('.');
+  if (labels.length < 2) return labels[0] || '';
+  if (labels.length >= 3) {
+    const last2 = labels[labels.length - 2] + '.' + labels[labels.length - 1];
+    if (TWO_PART_SUFFIX.indexOf(last2) !== -1) {
+      return labels[labels.length - 3] + '.' + last2;
+    }
+  }
+  return labels.slice(-2).join('.');
+}
+
 /** RDAP GET（跟随重定向，超时即抛错） */
 async function rdapQuery(url, timeoutMs) {
   const res = await fetch(url, {
@@ -111,11 +131,13 @@ function parseRdap(data, out) {
  */
 async function checkDomainExpiry(domain, timeoutMs = 8000) {
   const out = { ok: false, status: 1, expiryDate: null, daysLeft: 0, registrar: '', errorCode: '', errorMsg: '' };
-  const clean = String(domain || '').trim().replace(/^https?:\/\//i, '').split('/')[0].toLowerCase();
-  if (!/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(clean)) {
+  const cleanRaw = String(domain || '').trim().replace(/^https?:\/\//i, '').split('/')[0].toLowerCase();
+  if (!/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(cleanRaw)) {
     out.status = 3; out.errorCode = 'DOMAIN_INVALID'; out.errorMsg = '域名格式不正确';
     return out;
   }
+  // 子域识别主域：www.example.xyz / blog.example.com.cn 都查 example.xyz / example.com.cn
+  const clean = registrableDomain(cleanRaw);
   const tld = tldOf(clean);
   // .cn 类域名（CN 管理）：WHOIS(whois.cnnic.cn) 最可靠，优先走 WHOIS；其余 TLD 走 RDAP
   const cnFamily = tld === 'cn' || tld === 'com.cn' || tld === 'net.cn' || tld === 'org.cn' || tld === 'gov.cn' || tld === 'edu.cn';
