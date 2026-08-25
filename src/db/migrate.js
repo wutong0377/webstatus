@@ -10,8 +10,43 @@
  *
  * 说明：v1.0 的基础表结构视为 version 1；v1.1 及以后的改动以迁移形式叠加，
  * 因此老库无需手动改结构，直接更新代码重启即可自动升级。
+ *
+ * 幂等性：所有 DDL 均先查询 information_schema 判断列/表是否已存在，
+ * 即使此前迁移在中途失败留下半成品结构，重新启动也能自动补齐修复。
  */
 const { getPool } = require('../db');
+
+/** 表是否存在 */
+async function hasTable(conn, table) {
+  const [rows] = await conn.query(
+    'SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?',
+    [table]
+  );
+  return Number(rows[0].c) > 0;
+}
+
+/** 列是否存在 */
+async function hasColumn(conn, table, column) {
+  const [rows] = await conn.query(
+    'SELECT COUNT(*) AS c FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
+    [table, column]
+  );
+  return Number(rows[0].c) > 0;
+}
+
+/** 仅当列不存在时添加（幂等，兼容部分已应用的历史迁移；列名一律反引号包裹） */
+async function addColumnIfMissing(conn, table, column, ddl) {
+  if (!await hasColumn(conn, table, column)) {
+    await conn.query('ALTER TABLE `' + table + '` ADD COLUMN `' + column + '` ' + ddl);
+  }
+}
+
+/** 仅当表不存在时创建（幂等） */
+async function createTableIfMissing(conn, table, ddl) {
+  if (!await hasTable(conn, table)) {
+    await conn.query(ddl);
+  }
+}
 
 /** 迁移列表（按 version 升序执行） */
 const MIGRATIONS = [
@@ -20,25 +55,26 @@ const MIGRATIONS = [
     name: 'v1.1 结构扩展：探测/告警/RBAC/证书/DNS/报表',
     up: async (conn) => {
       // ---------- sites 扩展：探测与告警配置 ----------
-      await conn.query("ALTER TABLE sites ADD COLUMN alert_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '独立告警开关'");
-      await conn.query('ALTER TABLE sites ADD COLUMN expected_status INT NULL COMMENT \'期望HTTP状态码(默认2xx)\'');
-      await conn.query("ALTER TABLE sites ADD COLUMN check_dns TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否DNS记录监控'");
-      await conn.query("ALTER TABLE sites ADD COLUMN check_cert TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否SSL证书监控'");
-      await conn.query('ALTER TABLE sites ADD COLUMN cert_warn_days INT NOT NULL DEFAULT 30 COMMENT \'证书过期提前预警天数\'');
-      await conn.query("ALTER TABLE sites ADD COLUMN check_tcp TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否TCP端口检测'");
-      await conn.query('ALTER TABLE sites ADD COLUMN tcp_port INT NULL COMMENT \'TCP检测端口\'');
-      await conn.query("ALTER TABLE sites ADD COLUMN monitor_mode VARCHAR(10) NOT NULL DEFAULT 'http' COMMENT '监控模式: http/tcp/icmp'");
+      await addColumnIfMissing(conn, 'sites', 'alert_enabled', "TINYINT(1) NOT NULL DEFAULT 1 COMMENT '独立告警开关'");
+      await addColumnIfMissing(conn, 'sites', 'expected_status', 'INT NULL COMMENT \'期望HTTP状态码(默认2xx)\'');
+      await addColumnIfMissing(conn, 'sites', 'check_dns', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否DNS记录监控'");
+      await addColumnIfMissing(conn, 'sites', 'check_cert', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否SSL证书监控'");
+      await addColumnIfMissing(conn, 'sites', 'cert_warn_days', 'INT NOT NULL DEFAULT 30 COMMENT \'证书过期提前预警天数\'');
+      await addColumnIfMissing(conn, 'sites', 'check_tcp', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否TCP端口检测'");
+      await addColumnIfMissing(conn, 'sites', 'tcp_port', 'INT NULL COMMENT \'TCP检测端口\'');
+      await addColumnIfMissing(conn, 'sites', 'monitor_mode', "VARCHAR(10) NOT NULL DEFAULT 'http' COMMENT '监控模式: http/tcp/icmp'");
 
       // ---------- admin 扩展：RBAC + 2FA ----------
-      await conn.query("ALTER TABLE admin ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'admin' COMMENT 'admin普通/super超级/readonly只读'");
-      await conn.query("ALTER TABLE admin ADD COLUMN display_name VARCHAR(50) NOT NULL DEFAULT '' COMMENT '显示名称'");
-      await conn.query("ALTER TABLE admin ADD COLUMN 2fa_secret VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'TOTP密钥'");
-      await conn.query('ALTER TABLE admin ADD COLUMN 2fa_enabled TINYINT(1) NOT NULL DEFAULT 0 COMMENT \'是否启用2FA\'');
-      await conn.query('ALTER TABLE admin ADD COLUMN last_login_at DATETIME NULL');
-      await conn.query("ALTER TABLE admin ADD COLUMN last_login_ip VARCHAR(45) NOT NULL DEFAULT ''");
+      // 注意：2fa_secret / 2fa_enabled 以数字开头，必须反引号包裹，否则 MySQL 语法错误
+      await addColumnIfMissing(conn, 'admin', 'role', "VARCHAR(20) NOT NULL DEFAULT 'admin' COMMENT 'admin普通/super超级/readonly只读'");
+      await addColumnIfMissing(conn, 'admin', 'display_name', "VARCHAR(50) NOT NULL DEFAULT '' COMMENT '显示名称'");
+      await addColumnIfMissing(conn, 'admin', '2fa_secret', "VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'TOTP密钥'");
+      await addColumnIfMissing(conn, 'admin', '2fa_enabled', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否启用2FA'");
+      await addColumnIfMissing(conn, 'admin', 'last_login_at', 'DATETIME NULL');
+      await addColumnIfMissing(conn, 'admin', 'last_login_ip', "VARCHAR(45) NOT NULL DEFAULT ''");
 
       // ---------- 会话管理表 ----------
-      await conn.query(`CREATE TABLE IF NOT EXISTS auth_sessions (
+      await createTableIfMissing(conn, 'auth_sessions', `CREATE TABLE IF NOT EXISTS auth_sessions (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         admin_id INT UNSIGNED NOT NULL,
         session_id VARCHAR(128) NOT NULL,
@@ -52,7 +88,7 @@ const MIGRATIONS = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='登录会话'`);
 
       // ---------- 维护窗口表 ----------
-      await conn.query(`CREATE TABLE IF NOT EXISTS maintenance_windows (
+      await createTableIfMissing(conn, 'maintenance_windows', `CREATE TABLE IF NOT EXISTS maintenance_windows (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         site_id INT UNSIGNED NOT NULL,
         title VARCHAR(100) NOT NULL,
@@ -63,7 +99,7 @@ const MIGRATIONS = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='维护计划窗口'`);
 
       // ---------- DNS 记录规则表 ----------
-      await conn.query(`CREATE TABLE IF NOT EXISTS dns_rules (
+      await createTableIfMissing(conn, 'dns_rules', `CREATE TABLE IF NOT EXISTS dns_rules (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         site_id INT UNSIGNED NOT NULL,
         record_type VARCHAR(10) NOT NULL COMMENT 'A/AAAA/CNAME/MX',
@@ -73,7 +109,7 @@ const MIGRATIONS = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='DNS记录监控规则'`);
 
       // ---------- SSL 证书检测记录表 ----------
-      await conn.query(`CREATE TABLE IF NOT EXISTS cert_checks (
+      await createTableIfMissing(conn, 'cert_checks', `CREATE TABLE IF NOT EXISTS cert_checks (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         site_id INT UNSIGNED NOT NULL,
         status TINYINT NOT NULL DEFAULT 1 COMMENT '1正常 2预警 3异常',
@@ -90,7 +126,7 @@ const MIGRATIONS = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='SSL证书检测'`);
 
       // ---------- 告警日志中心表 ----------
-      await conn.query(`CREATE TABLE IF NOT EXISTS alert_logs (
+      await createTableIfMissing(conn, 'alert_logs', `CREATE TABLE IF NOT EXISTS alert_logs (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         site_id INT UNSIGNED NULL,
         alert_type VARCHAR(50) NOT NULL COMMENT 'down/recover/cert/dns/tcp/webhook...',
@@ -106,7 +142,7 @@ const MIGRATIONS = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='告警日志中心'`);
 
       // ---------- Webhook 配置表 ----------
-      await conn.query(`CREATE TABLE IF NOT EXISTS webhooks (
+      await createTableIfMissing(conn, 'webhooks', `CREATE TABLE IF NOT EXISTS webhooks (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         url VARCHAR(500) NOT NULL,
@@ -116,7 +152,7 @@ const MIGRATIONS = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Webhook回调配置'`);
 
       // ---------- 手动故障事件表 ----------
-      await conn.query(`CREATE TABLE IF NOT EXISTS manual_faults (
+      await createTableIfMissing(conn, 'manual_faults', `CREATE TABLE IF NOT EXISTS manual_faults (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         site_id INT UNSIGNED NOT NULL,
         title VARCHAR(200) NOT NULL,
@@ -134,11 +170,11 @@ const MIGRATIONS = [
     name: 'v1.1 补充：域名到期检测与证书吊销检测',
     up: async (conn) => {
       // sites 扩展：域名到期 / OCSP 吊销检测开关
-      await conn.query("ALTER TABLE sites ADD COLUMN check_domain TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否域名到期检测'");
-      await conn.query('ALTER TABLE sites ADD COLUMN domain_warn_days INT NOT NULL DEFAULT 90 COMMENT \'域名到期提前预警天数\'');
-      await conn.query("ALTER TABLE sites ADD COLUMN check_ocsp TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否OCSP吊销检测'");
+      await addColumnIfMissing(conn, 'sites', 'check_domain', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否域名到期检测'");
+      await addColumnIfMissing(conn, 'sites', 'domain_warn_days', 'INT NOT NULL DEFAULT 90 COMMENT \'域名到期提前预警天数\'');
+      await addColumnIfMissing(conn, 'sites', 'check_ocsp', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否OCSP吊销检测'");
       // 域名注册到期检测记录表
-      await conn.query(`CREATE TABLE IF NOT EXISTS domain_checks (
+      await createTableIfMissing(conn, 'domain_checks', `CREATE TABLE IF NOT EXISTS domain_checks (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         site_id INT UNSIGNED NOT NULL,
         domain VARCHAR(255) NOT NULL,

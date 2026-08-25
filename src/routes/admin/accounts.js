@@ -23,7 +23,7 @@ router.use(requireRole(['super', 'admin']));
 router.get('/', async (req, res, next) => {
   try {
     const rows = await query(
-      'SELECT id, username, display_name, role, 2fa_enabled AS twofa_enabled, created_at, last_login_at FROM admin ORDER BY id ASC'
+      'SELECT id, username, display_name, role, `2fa_enabled` AS twofa_enabled, created_at, last_login_at FROM admin ORDER BY id ASC'
     );
     res.json({
       code: 0,
@@ -138,7 +138,7 @@ router.post('/:id(\\d+)/2fa/verify', async (req, res, next) => {
     if (!verifyTOTP(secret, code, 1)) {
       return res.status(400).json({ code: 400, message: '动态口令不正确，请核对后重试' });
     }
-    await query('UPDATE admin SET 2fa_enabled = 1, 2fa_secret = ? WHERE id = ?', [secret, id]);
+    await query('UPDATE admin SET `2fa_enabled` = 1, `2fa_secret` = ? WHERE id = ?', [secret, id]);
     res.json({ code: 0, message: '两步验证已启用' });
   } catch (e) { next(e); }
 });
@@ -150,7 +150,7 @@ router.post('/:id(\\d+)/2fa/disable', async (req, res, next) => {
     if (id !== req.session.adminId) {
       return res.status(403).json({ code: 403, message: '只能为当前登录账号配置两步验证' });
     }
-    await query('UPDATE admin SET 2fa_enabled = 0, 2fa_secret = ? WHERE id = ?', ['', id]);
+    await query('UPDATE admin SET `2fa_enabled` = 0, `2fa_secret` = ? WHERE id = ?', ['', id]);
     res.json({ code: 0, message: '两步验证已关闭' });
   } catch (e) { next(e); }
 });

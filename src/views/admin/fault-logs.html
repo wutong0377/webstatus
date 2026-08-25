@@ -4,13 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>故障日志 - WebStatus 管理后台</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
-  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/app.css?v=1.1.2">
 </head>
 <body>
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js"></script>
+  <script src="/assets/js/common.js?v=1.1.2"></script>
   <script>
   (() => {
     const { api, esc, h, toast, t } = WebStatus;
@@ -25,10 +23,10 @@
 
       const filter = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-4 flex flex-wrap items-end gap-3');
       const fSite = h('select', sel);
-      const allSite = h('option', t('faultLogs.allSites')); allSite.value = ''; fSite.appendChild(allSite);
+      const allSite = h('option', '', t('faultLogs.allSites')); allSite.value = ''; fSite.appendChild(allSite);
       const fStatus = h('select', sel);
       [['', t('faultLogs.allStatus')], ['3', t('status.down')], ['2', t('status.slow')]].forEach(o => {
-        const op = h('option', o[1]); op.value = o[0]; fStatus.appendChild(op);
+        const op = h('option', '', o[1]); op.value = o[0]; fStatus.appendChild(op);
       });
       const fCode = h('input', inp);
       fCode.placeholder = t('faultLogs.codePlaceholder');
@@ -57,7 +55,7 @@
       // 站点选项
       api('/api/admin/settings/site-options').then(r => {
         (r.data || []).forEach(s => {
-          const op = h('option', esc(s.name)); op.value = s.id; fSite.appendChild(op);
+          const op = h('option', '', esc(s.name)); op.value = s.id; fSite.appendChild(op);
         });
       }).catch(() => {});
 

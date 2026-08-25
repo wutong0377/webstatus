@@ -1,6 +1,6 @@
 /**
  * WebStatus 前端公共脚本
- * 依赖：TailwindCSS(CDN) / Chart.js(CDN) / fetch
+ * 依赖：Chart.js(CDN) / fetch；样式由编译后的 app.css（含 Tailwind）提供
  * 职责：API 封装(自动 CSRF)、主题切换、状态图标与文案、格式化、Toast、后台侧边栏渲染。
  * 注意：所有动态数据渲染必须经过 esc()，防止 XSS。
  */
@@ -109,7 +109,8 @@ const WebStatus = (() => {
     list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
     info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
     shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-    server: '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'
+    server: '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>',
+    plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'
   };
 
   function icon(name, cls) {

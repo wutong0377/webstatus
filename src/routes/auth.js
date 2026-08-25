@@ -102,7 +102,7 @@ router.post('/login',
     }
 
     try {
-      const admins = await query('SELECT id, username, password_hash, role, 2fa_enabled, 2fa_secret FROM admin WHERE username = ?', [username]);
+      const admins = await query('SELECT id, username, password_hash, role, `2fa_enabled`, `2fa_secret` FROM admin WHERE username = ?', [username]);
       if (!admins.length) {
         recordFailure(username, ip);
         return res.status(401).json({ code: 401, message: '用户名或密码错误' });
@@ -148,7 +148,7 @@ router.post('/verify-2fa',
       return res.status(400).json({ code: 400, message: '验证已过期，请重新登录' });
     }
     try {
-      const admin = await queryOne('SELECT id, username, role, 2fa_enabled, 2fa_secret FROM admin WHERE id = ?', [ticket.adminId]);
+      const admin = await queryOne('SELECT id, username, role, `2fa_enabled`, `2fa_secret` FROM admin WHERE id = ?', [ticket.adminId]);
       if (!admin || Number(admin['2fa_enabled']) !== 1) {
         twoFactorTickets.delete(tempToken);
         return res.status(400).json({ code: 400, message: '账号状态异常，请重新登录' });

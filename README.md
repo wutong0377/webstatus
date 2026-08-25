@@ -59,17 +59,18 @@
 
 | 类别 | 技术 |
 |---|---|
-| 后端 | Node.js ≥ 16，Express 4 |
+| 后端 | Node.js ≥ 18，Express 4 |
 | 数据库 | MySQL 5.7 / 8.x（建议 8.x，utf8mb4） |
 | 邮件 | nodemailer（SMTP） |
-| 前端 | 原生 HTML + TailwindCSS(CDN) + Vanilla JS + Chart.js(CDN) |
+| 前端 | 原生 HTML + TailwindCSS(预编译 app.css) + Vanilla JS + Chart.js(CDN) |
 | 部署 | PM2 + Nginx |
 
 **环境要求**
 
 - Linux / Windows 均可运行；
-- 需要能访问公网（用于 CDN 静态资源与探测目标）；
-- 建议使用**低权限 MySQL 账号**，**不建议直接使用 root**。
+- 需要能访问公网（用于 Chart.js 图表资源与探测目标）；
+- 建议使用**低权限 MySQL 账号**，**不建议直接使用 root**；
+- **Node.js ≥ 18**：更新检测 / 域名到期(RDAP) / Webhook 推送依赖内置 `fetch`（Node 18+ 提供）。
 
 ## 快速开始（安装向导）
 
@@ -141,7 +142,7 @@ nginx -t && systemctl reload nginx
 
 ## 宝塔面板部署（10 步）
 
-1. **软件商店**安装：Nginx、MySQL、Node.js（版本 ≥ 16）
+1. **软件商店**安装：Nginx、MySQL、Node.js（版本 ≥ 18）
 2. **数据库 → 添加数据库**：库名 `webstatus`，密码记下来（勿用 root）
 3. **上传代码**：GitHub 下载 ZIP → 上传 `/www/wwwroot/` 解压 → 改名 `webstatus` → 目录属主设 `www`
 4. **网站 → Node项目 → 添加**：项目目录 `/www/wwwroot/webstatus`、启动命令 `npm run start`、端口 `3000`、绑定域名
@@ -300,18 +301,17 @@ location ~ /\. { deny all; }
 
 ## Cloudflare / CDN 优化
 
-### 现状：静态资源走公共 CDN
+### 现状：样式已预编译，仅图表走公共 CDN
 
-前端仅依赖两个外部资源，均通过公共 CDN 加载：
+从 v1.1.2 起，**TailwindCSS 已预编译进 `src/views/assets/css/app.css`**（构建产物随仓库提交，部署无需构建步骤），所有页面通过 `<link href="/assets/css/app.css?v=版本号">` 引用，不再依赖 `cdn.tailwindcss.com`。唯一仍走公共 CDN 的资源：
 
 | 资源 | 当前引用 | 用途 |
 |---|---|---|
-| TailwindCSS（独立构建版） | `<script src="https://cdn.tailwindcss.com"></script>` | 全站样式（所有 HTML 页面的 `<head>`） |
 | Chart.js 4.4.1 | `<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>` | 站点详情页延迟曲线（`src/views/site.html`） |
 
-公共 CDN 的优点是不占用自身带宽；缺点是**内网部署、离线环境、或国内访问不稳定**时会白屏 / 图表不显示。下面两种场景建议本地化。
+公共 CDN 的优点是不占用自身带宽；缺点是**内网部署、离线环境、或国内访问不稳定**时会白屏 / 图表不显示。内网部署建议本地化 Chart.js。
 
-### 场景一：内网 / 离线部署 —— 下载到本地引用
+### 场景一：内网 / 离线部署 —— 本地化 Chart.js
 
 1. 创建本地静态目录：
 
@@ -319,33 +319,14 @@ location ~ /\. { deny all; }
    mkdir -p src/views/assets/vendor
    ```
 
-2. 下载 Tailwind 独立构建版（约 400KB，纯前端运行时）：
+2. 下载 Chart.js UMD 构建（约 200KB，版本号须与当前一致：4.4.1）：
 
    ```bash
-   # 与当前 CDN 同源同版本：https://cdn.tailwindcss.com
-   curl -o src/views/assets/vendor/tailwind.min.js https://cdn.tailwindcss.com
-   ```
-
-3. 下载 Chart.js UMD 构建（约 200KB）：
-
-   ```bash
-   # 版本号须与当前一致：4.4.1
    curl -o src/views/assets/vendor/chart.umd.min.js \
      https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
    ```
 
-4. **替换所有页面**的 Tailwind CDN 引用（`index.html`、`site.html`、`install.html`、`admin/*.html`）：
-
-   ```html
-   <!-- 替换前 -->
-   <script src="https://cdn.tailwindcss.com"></script>
-   <!-- 替换后 -->
-   <script src="/assets/vendor/tailwind.min.js"></script>
-   ```
-
-   紧邻其下的 `tailwind.config = { darkMode: 'class' };` 保持不变。
-
-5. **仅替换 `site.html`** 的 Chart.js 引用：
+3. 替换 `site.html` 的 Chart.js 引用：
 
    ```html
    <!-- 替换前 -->
@@ -354,9 +335,17 @@ location ~ /\. { deny all; }
    <script src="/assets/vendor/chart.umd.min.js"></script>
    ```
 
-6. 静态资源默认走 `/assets/` 前缀，Nginx 已有的 `/assets/` 缓存规则可无缝覆盖 `vendor/` 子目录，无需额外配置。
+4. 静态资源默认走 `/assets/` 前缀，Nginx 已有的 `/assets/` 缓存规则可无缝覆盖 `vendor/` 子目录，无需额外配置。
 
-> 说明：v1.1 默认仍保持 CDN 引用以降低部署成本；如做上述本地化，务必同时下载两个文件、版本与上表一致，避免 Tailwind 或 Chart.js 版本不匹配。
+### 自定义样式 / 重新构建 app.css
+
+所有页面的样式来自编译后的 `src/views/assets/css/app.css`。如需修改 Tailwind 配置或自定义样式：
+
+1. 编辑 `tailwind.config.js` 与 `src/views/assets/css/input.css`（Tailwind 指令 + 自定义样式的源文件）；
+2. 运行 `npm run build:css` 重新生成 `app.css`；
+3. 改动涉及新类名时，确认在 `src/views/**/*.html`、`src/views/**/*.js` 中能以字面量出现（构建时按内容扫描提取）。
+
+> 说明：部署不需要 Node 构建步骤——`app.css` 已随仓库提交，直接 `npm install && npm start` 即可。
 
 ### 场景二：套了 Cloudflare 代理
 
@@ -403,7 +392,7 @@ npm install ocsp
 
 - **Ping 权限**：系统通过调用系统 `ping` 命令获取延迟。部分环境（容器内无 ping 二进制、或进程无相关权限）会导致 ping 失败——属正常现象，系统会以 HTTP 探测结果为准；
 - **容器环境**：Docker 容器需安装 `ping`（如 `iputils-ping`），且需保证 Node 进程可访问公网；
-- **CDN 依赖**：前端样式（TailwindCSS）与图表库（Chart.js）通过 CDN 引入，内网部署时需自行将资源下载到 `src/views/assets` 并替换引用。
+- **CDN 依赖**：样式已预编译进 `app.css`（无需 CDN）；仅图表库（Chart.js）通过 CDN 引入，内网部署时可将 `chart.umd.min.js` 下载到 `src/views/assets/vendor` 并替换 `site.html` 中的引用（详见「Cloudflare / CDN 优化」）。
 
 ## 常见问题排错
 

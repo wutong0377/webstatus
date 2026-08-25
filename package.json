@@ -1,14 +1,15 @@
 {
   "name": "webstatus",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "网站状态监控 WebStatus - 开源自托管网站状态监控系统 (Node.js + Express + MySQL)",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "build:css": "tailwindcss -i src/views/assets/css/input.css -o src/views/assets/css/app.css --minify"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   },
   "keywords": [
     "monitor",
@@ -27,5 +28,8 @@
     "multer": "^2.0.0",
     "mysql2": "^3.11.0",
     "nodemailer": "^6.9.14"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
   }
 }

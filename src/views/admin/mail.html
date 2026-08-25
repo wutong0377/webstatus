@@ -4,13 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>邮件告警设置 - WebStatus 管理后台</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
-  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/app.css?v=1.1.2">
 </head>
 <body>
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js"></script>
+  <script src="/assets/js/common.js?v=1.1.2"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, t } = WebStatus;
@@ -281,7 +279,7 @@
           tplVars = r.vars || [];
           varsBox.lastChild.innerHTML = '';
           tplVars.forEach(v => {
-            varsBox.lastChild.appendChild(h('code', 'px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300', '{{' + v.key + '}}'));
+            varsBox.lastChild.appendChild(h('code', 'px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300', '{{' + esc(v.key) + '}}'));
           });
           renderType();
           fill();

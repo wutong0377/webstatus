@@ -4,9 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>安装向导 - WebStatus 网站状态监控</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
-  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/app.css?v=1.1.2">
 </head>
 <body class="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -47,10 +45,19 @@
     <div id="ws-copyright" class="mt-4"></div>
   </div>
 
-  <script src="/assets/js/common.js"></script>
+  <script src="/assets/js/common.js?v=1.1.2"></script>
   <script>
   (() => {
-    const { api, esc, h, icon, toast, t } = WebStatus;
+    // 防御性解构：兼容浏览器缓存的旧版 common.js（早期版本未导出 t/i18n 等函数），
+    // 避免安装向导因缓存旧脚本而白屏崩溃（TypeError: t is not a function）
+    const WS = (typeof WebStatus !== 'undefined' && WebStatus) ? WebStatus : {};
+    const api = WS.api || (async () => { throw new Error('公共脚本加载失败，请强制刷新浏览器缓存（Ctrl+F5）后重试'); });
+    const esc = WS.esc || (v => (v === undefined || v === null ? '' : String(v)));
+    const h = WS.h || ((tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined && html !== null) e.innerHTML = html; return e; });
+    const icon = WS.icon || (() => '');
+    const toast = WS.toast || (() => {});
+    const t = WS.t || (k => k);
+    const fmtBytes = WS.fmtBytes || (b => b + ' B');
     const STEPS = ['install.step1', 'install.step2', 'install.step3', 'install.step4', 'install.step5', 'install.step6', 'install.step7'];
     const panels = {};
     let currentStep = 1;
@@ -59,8 +66,8 @@
     let uploaded = null; // { path(session) }
 
     // 语言切换按钮
-    if (typeof WebStatus.langBtn === 'function') {
-      document.getElementById('lang-holder').appendChild(WebStatus.langBtn());
+    if (typeof WS.langBtn === 'function') {
+      document.getElementById('lang-holder').appendChild(WS.langBtn());
     }
 
     /* ---------- 步骤指示器 ---------- */
@@ -109,7 +116,7 @@
       const r = await api('/install/api/check').catch(() => ({ code: -1 }));
       panel.innerHTML = '';
       const items = [
-        { ok: r.nodeOk, label: 'Node.js 版本', value: r.node + (r.nodeOk ? '' : '（需要 ≥16）') },
+        { ok: r.nodeOk, label: 'Node.js 版本', value: r.node + (r.nodeOk ? '' : '（需要 ≥18）') },
         { ok: r.schemaFile, label: '数据库结构文件 schema.sql', value: r.schemaFile ? '已找到' : '缺失' },
         { ok: r.tmpWritable, label: '临时上传目录可写', value: r.tmpWritable ? '可写' : '不可写' },
         { ok: r.rootWritable, label: '项目根目录可写（config.json）', value: r.rootWritable ? '可写' : '不可写' }
@@ -267,7 +274,7 @@
           uploaded = true;
           info.classList.remove('text-slate-500');
           info.classList.add('text-emerald-600');
-          info.textContent = '已上传：' + r.originalName + '（' + WebStatus.fmtBytes(r.size) + '）' + (r.isSystemBackup ? ' · 校验通过' : ' · 警告：未能识别为本系统备份，导入将被拒绝');
+          info.textContent = '已上传：' + r.originalName + '（' + fmtBytes(r.size) + '）' + (r.isSystemBackup ? ' · 校验通过' : ' · 警告：未能识别为本系统备份，导入将被拒绝');
           risk.classList.remove('hidden');
           btn.classList.remove('hidden');
           if (!r.isSystemBackup) { btn.disabled = true; }
@@ -504,7 +511,7 @@
     initStep5();
     initStep6();
     initStep7();
-    if (typeof WebStatus.renderCopyright === 'function') WebStatus.renderCopyright();
+    if (typeof WS.renderCopyright === 'function') WS.renderCopyright();
   })();
   </script>
 </body>

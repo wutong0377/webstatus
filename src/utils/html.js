@@ -22,7 +22,7 @@ const ALLOWED_TAGS = [
 ];
 const ALLOWED_ATTRS = ['href', 'title', 'target', 'rel'];
 
-const TAG_RE = /<\/?([a-zA-Z0-9]+)((?:\s+[a-zA-Z0-9-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*(\/?)>/g;
+const TAG_RE = /(<\/?)([a-zA-Z0-9]+)((?:\s+[a-zA-Z0-9-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*(\/?)>/g;
 const ATTR_RE = /([a-zA-Z0-9-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
 
 /** 解码 HTML 实体（用于 href 协议校验，防 javascript: 实体变体） */
@@ -43,9 +43,12 @@ function decodeEntities(s) {
 function sanitizeHtml(input) {
   let s = String(input || '');
   // 第一步：白名单处理合法闭合标签，输出用 / 占位 < > 避免被第二步转义
-  s = s.replace(TAG_RE, (m, tag, attrs, selfClose) => {
+  s = s.replace(TAG_RE, (m, leading, tag, attrs, selfClose) => {
     const t = tag.toLowerCase();
-    if (ALLOWED_TAGS.indexOf(t) === -1) return '';
+    if (ALLOWED_TAGS.indexOf(t) === -1) return ''; // 非白名单标签（含其闭合标签）一律移除
+    const isClose = leading === '</';
+    // 闭合标签不允许携带属性（防御畸形输入，一律剥离）
+    if (isClose) return '/' + t + '';
     let safeAttrs = '';
     let am;
     while ((am = ATTR_RE.exec(attrs)) !== null) {

@@ -1,5 +1,20 @@
 # 更新日志
 
+## [v1.1.2] - 2026-08-25
+
+### 安装阻断 Bug 修复（v1.1.0 / v1.1.1 均无法安装）
+- **修复安装向导白屏崩溃 `TypeError: t is not a function`**：浏览器会缓存旧版 `/assets/js/common.js`（最长达 1 天），旧版未导出 `t`/i18n 函数，而安装页直接解构导致崩溃。现所有页面对 `common.js` / `app.css` 增加 `?v=1.1.2` 版本号缓存破坏；安装页改为防御性解构（`WS.t || (k => k)` 等兜底），即使缓存旧脚本也不再崩溃。
+- **修复致命缺失文件 `src/data/errorCodes.js`**：v1.1.1 误删了该文件但代码仍 `require` 它，导致安装完成后重启服务即 `MODULE_NOT_FOUND` 崩溃、后台无法登录。已从 v1.0 恢复并补充 v1.1 新增错误码（证书 / OCSP / 域名 RDAP 等），共 54 条。
+- **修复数据库迁移失败**：`migrate.js` v2 中 `ADD COLUMN 2fa_secret / 2fa_enabled` 未加反引号，MySQL 语法错误导致迁移中断、`role`/`2fa_*` 等列缺失、登录接口报"Unknown column"。已改用反引号，并把迁移改为**幂等**（先查 `information_schema` 判断列/表存在性），部分迁移过的旧库重启后能自动补齐修复。
+- **修复 `auth.js` / `accounts.js` 中 `2fa_*` 列未加反引号**导致的 SQL 解析错误。
+
+### 生产环境适配
+- **移除 `cdn.tailwindcss.com` 生产警告**：引入 Tailwind CLI 生产构建（`npm run build:css`），编译产物 `app.css` 随仓库提交，部署无需构建步骤；所有页面改为引用本地编译样式并删除 CDN 脚本，离线 / 内网部署不再依赖 Tailwind CDN。
+- **Node 版本要求修正为 ≥ 18**：更新检测 / RDAP 域名查询 / Webhook 推送依赖内置 `fetch`（Node 18+），`engines` 声明与安装向导自检、README 同步更新为 ≥ 18。
+
+### 安全加固
+- **安装向导 CSRF 同源校验**：安装阶段（登录建立会话前）对所有写接口增加 Origin/Host 同源校验，防止跨站脚本诱导完成安装（把数据库指向攻击者服务器）。无 Origin 的自动化部署不受影响。
+
 ## [v1.1.1] - 2026-08-24
 
 ### Bug 修复

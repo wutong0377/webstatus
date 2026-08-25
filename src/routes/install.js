@@ -36,6 +36,30 @@ const MAX_UPLOAD = 16 * 1024 * 1024; // 16MB
 /* ------------------- 安装向导页面 ------------------- */
 router.get('/', (req, res) => res.sendFile(path.join(VIEWS_DIR, 'install.html')));
 
+/* ------------------- 同源校验（安装阶段 CSRF 防护） ------------------- */
+/**
+ * 安装向导在登录建立会话之前开放，传统 CSRF Token 机制在早期步骤（无会话）下不可用。
+ * 这里对全部写请求做 Origin/Host 同源校验：
+ *   - 现代浏览器跨站 POST 必定携带 Origin 头，非本机 Host 一律拒绝；
+ *   - 无 Origin 的请求（curl/脚本）放行，避免影响自动化部署。
+ */
+function sameOriginCheck(req, res, next) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      const u = new URL(origin);
+      if (u.host !== (req.headers.host || '')) {
+        return res.status(403).json({ code: 403, message: '来源校验失败，请从安装向导页面操作' });
+      }
+    } catch (e) {
+      return res.status(403).json({ code: 403, message: '来源校验失败，请从安装向导页面操作' });
+    }
+  }
+  next();
+}
+router.use(sameOriginCheck);
+
 /* ------------------- 工具函数 ------------------- */
 
 /** 将数据库错误转换为不泄露底层信息的友好提示 */
@@ -114,7 +138,7 @@ router.get('/api/check', (req, res) => {
   const major = Number(process.versions.node.split('.')[0]);
   const result = {
     node: process.version,
-    nodeOk: major >= 16,
+    nodeOk: major >= 18,
     schemaFile: fs.existsSync(SCHEMA_FILE),
     tmpWritable: checkWritable(TMP_DIR),
     rootWritable: checkWritable(ROOT),
