@@ -59,7 +59,9 @@
     let uploaded = null; // { path(session) }
 
     // 语言切换按钮
-    document.getElementById('lang-holder').appendChild(WebStatus.langBtn());
+    if (typeof WebStatus.langBtn === 'function') {
+      document.getElementById('lang-holder').appendChild(WebStatus.langBtn());
+    }
 
     /* ---------- 步骤指示器 ---------- */
     function renderSteps() {
@@ -502,7 +504,7 @@
     initStep5();
     initStep6();
     initStep7();
-    WebStatus.renderCopyright();
+    if (typeof WebStatus.renderCopyright === 'function') WebStatus.renderCopyright();
   })();
   </script>
 </body>

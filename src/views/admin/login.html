@@ -57,7 +57,7 @@
     let tempToken = null; // 2FA 临时票据
 
     // 语言切换按钮
-    $('#lang-holder').appendChild(WebStatus.langBtn());
+    if (typeof WebStatus.langBtn === 'function') $('#lang-holder').appendChild(WebStatus.langBtn());
     // 版权渲染（校验失败会停止渲染）
     WebStatus.renderCopyright();
 
