@@ -117,35 +117,41 @@ async function checkDomainExpiry(domain, timeoutMs = 8000) {
     return out;
   }
   const tld = tldOf(clean);
+  // .cn 类域名（CN 管理）：WHOIS(whois.cnnic.cn) 最可靠，优先走 WHOIS；其余 TLD 走 RDAP
+  const cnFamily = tld === 'cn' || tld === 'com.cn' || tld === 'net.cn' || tld === 'org.cn' || tld === 'gov.cn' || tld === 'edu.cn';
+  const whoisServer = WHOIS_SERVERS[tld];
 
-  // 1) 直连注册局 RDAP（绕开 rdap.org，尤其 .cn）
-  const direct = RDAP_SERVERS[tld];
-  if (direct) {
-    try {
-      return parseRdap(await rdapQuery(direct + encodeURIComponent(clean), timeoutMs), out);
-    } catch (e) { /* 直连失败，尝试下一层 */ }
+  async function tryWhois() {
+    if (!whoisServer) return null;
+    const text = await whoisQuery(clean, whoisServer, timeoutMs);
+    const expiry = parseWhoisExpiry(text);
+    if (!expiry) return null;
+    const daysLeft = Math.floor((expiry.getTime() - Date.now()) / 86400000);
+    out.ok = true;
+    out.expiryDate = formatDateTime(expiry);
+    out.daysLeft = daysLeft;
+    out.status = daysLeft < 0 ? 3 : 1;
+    return out;
+  }
+  async function tryRdapDirect() {
+    const direct = RDAP_SERVERS[tld];
+    if (!direct) return null;
+    return parseRdap(await rdapQuery(direct + encodeURIComponent(clean), timeoutMs), out);
+  }
+  async function tryRdapBootstrap() {
+    return parseRdap(await rdapQuery('https://rdap.org/domain/' + encodeURIComponent(clean), timeoutMs), out);
   }
 
-  // 2) rdap.org 引导
-  try {
-    return parseRdap(await rdapQuery('https://rdap.org/domain/' + encodeURIComponent(clean), timeoutMs), out);
-  } catch (e) { /* 失败，尝试 WHOIS */ }
-
-  // 3) WHOIS 文本兜底
-  const whoisServer = WHOIS_SERVERS[tld];
-  if (whoisServer) {
-    try {
-      const text = await whoisQuery(clean, whoisServer, timeoutMs);
-      const expiry = parseWhoisExpiry(text);
-      if (expiry) {
-        const daysLeft = Math.floor((expiry.getTime() - Date.now()) / 86400000);
-        out.ok = true;
-        out.expiryDate = formatDateTime(expiry);
-        out.daysLeft = daysLeft;
-        out.status = daysLeft < 0 ? 3 : 1;
-        return out;
-      }
-    } catch (e) { /* 忽略 */ }
+  if (cnFamily) {
+    // .cn：WHOIS → RDAP 直连 → rdap.org
+    try { const r = await tryWhois(); if (r) return r; } catch (e) {}
+    try { const r = await tryRdapDirect(); if (r) return r; } catch (e) {}
+    try { const r = await tryRdapBootstrap(); if (r) return r; } catch (e) {}
+  } else {
+    // 其他：RDAP 直连 → rdap.org → WHOIS
+    try { const r = await tryRdapDirect(); if (r) return r; } catch (e) {}
+    try { const r = await tryRdapBootstrap(); if (r) return r; } catch (e) {}
+    try { const r = await tryWhois(); if (r) return r; } catch (e) {}
   }
 
   // 全部失败：归类为"无法获取到期信息"，不标红异常

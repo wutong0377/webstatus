@@ -202,6 +202,7 @@ const WebStatus = (() => {
     'site.timelineEmpty': { zh: '该时间段内暂无状态记录', en: 'No status records in this period' },
     'site.faultTitle': { zh: '故障记录', en: 'Fault History' },
     'site.faultEmpty': { zh: '暂无历史故障', en: 'No historical faults' },
+    'site.blocksTitle': { zh: '状态方块图（近 7 天）', en: 'Status Blocks (7 days)' },
     'site.chartLabel': { zh: '响应耗时(ms)', en: 'Response time (ms)' },
     'site.tooltipDelay': { zh: '耗时', en: 'Latency' },
     'site.ongoing': { zh: '进行中', en: 'ongoing' },

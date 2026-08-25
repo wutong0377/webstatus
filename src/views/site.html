@@ -7,7 +7,7 @@
   <meta name="description" content="WebStatus 网站状态监控 - 站点实时状态、延迟曲线与故障记录">
   <meta name="keywords" content="WebStatus,网站状态监控,uptime,status">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.4.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.5.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -63,6 +63,13 @@
       </div>
     </div>
 
+    <!-- 状态方块图（近 7 天每小时） -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+      <h2 class="font-semibold text-sm mb-4" data-i18n="site.blocksTitle">状态方块图（近 7 天）</h2>
+      <div id="blocks-legend" class="flex items-center gap-3 text-xs text-slate-400 mb-3 flex-wrap"></div>
+      <div id="blocks-grid" class="space-y-1"></div>
+    </div>
+
     <!-- 故障记录 -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
       <h2 class="font-semibold text-sm mb-4" data-i18n="site.faultTitle">故障记录</h2>
@@ -75,7 +82,7 @@
     <div id="ws-copyright"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.4.0"></script>
+  <script src="/assets/js/common.js?v=2.5.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
@@ -169,7 +176,6 @@
         c.appendChild(secLine('剩余天数', (cert.days_left !== null && cert.days_left !== undefined) ? cert.days_left + ' 天' : '-'));
         const san = parseSan(cert.san);
         if (san.length) c.appendChild(secLine('SAN 域名', san.length + ' 个'));
-        c.appendChild(secLine('OCSP 吊销', cert.ocsp_status === 3 ? '已吊销' : (cert.ocsp_status === 2 ? '未校验（无 ocsp 依赖）' : '未吊销')));
         if (Number(cert.status) !== 1 && cert.error_code) {
           const certMsg = cert.error_code === 'NOT_HTTPS' ? '站点非 HTTPS，未进行证书检测' : (cert.error_code === 'CERT_TIMEOUT' ? '证书检测超时' : cert.error_code);
           c.appendChild(h('div', 'text-xs text-amber-600 dark:text-amber-400 mt-1', esc(certMsg)));
@@ -369,6 +375,42 @@
       info.appendChild(top);
     }
 
+    /* ---------- 状态方块图（近 7 天每小时） ---------- */
+    const BLOCK_BG = { 0: 'bg-slate-200 dark:bg-slate-700', 1: 'bg-emerald-400', 2: 'bg-amber-400', 3: 'bg-red-500', 4: 'bg-blue-500' };
+    const BLOCK_TEXT = { 0: t('report.noData'), 1: t('status.up'), 2: t('status.slow'), 3: t('status.down'), 4: t('status.maintenance') };
+    function renderBlocks() {
+      const grid = $('#blocks-grid');
+      const legend = $('#blocks-legend');
+      if (!grid) return;
+      grid.innerHTML = '';
+      legend.innerHTML = '';
+      legend.appendChild(h('span', '', t('report.legend')));
+      [[BLOCK_TEXT[1], BLOCK_BG[1]], [BLOCK_TEXT[2], BLOCK_BG[2]], [BLOCK_TEXT[3], BLOCK_BG[3]], [BLOCK_TEXT[4], BLOCK_BG[4]], [BLOCK_TEXT[0], BLOCK_BG[0]]].forEach(p => {
+        legend.appendChild(h('span', 'flex items-center gap-1', '<span class="w-3 h-3 rounded-sm ' + p[1] + '"></span>' + esc(p[0])));
+      });
+      api('/api/public/site/' + id + '/blocks').then(r => {
+        const data = r.data || [];
+        grid.innerHTML = '';
+        const hpd = 24;
+        for (let d = 0; d < 7; d++) {
+          const row = h('div', 'flex items-center gap-2');
+          const label = h('span', 'w-24 text-xs text-slate-400 flex-shrink-0', esc(data[d * hpd] ? String(data[d * hpd].time).slice(0, 10) : ''));
+          row.appendChild(label);
+          const cells = h('div', 'flex-1 grid gap-[2px]');
+          cells.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+          for (let hh = 0; hh < hpd; hh++) {
+            const item = data[d * hpd + hh];
+            if (!item) continue;
+            const blk = h('div', 'aspect-square rounded-[2px] ' + (BLOCK_BG[item.status] || BLOCK_BG[0]));
+            blk.title = item.time + ' · ' + (BLOCK_TEXT[item.status] || '未知');
+            cells.appendChild(blk);
+          }
+          row.appendChild(cells);
+          grid.appendChild(row);
+        }
+      }).catch(() => { /* 方块图加载失败不影响其他区块 */ });
+    }
+
     async function load() {
       try {
         const r = await api('/api/public/site/' + id + '?range=' + range);
@@ -392,8 +434,9 @@
 
     renderRanges();
     load();
+    renderBlocks();
     // 切换语言后重新拉取（含图表 tooltip 文案）
-    document.addEventListener('ws-langchange', () => { renderRanges(); load(); });
+    document.addEventListener('ws-langchange', () => { renderRanges(); load(); renderBlocks(); });
     // 详情页低频轮询（3 倍前端刷新间隔），此处用 60s
     setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, 60000);
 

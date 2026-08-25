@@ -21,6 +21,16 @@ router.use(rateLimit({ windowMs: 60 * 1000, max: 120, message: '请求过于频�
 const pad = n => String(n).padStart(2, '0');
 const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
+/**
+ * 前台保密：把字符串中的 IP 地址打码（IPv4 保留前两段，IPv6 打码），
+ * 防止探测/错误信息把站点真实 IP 暴露给访客。
+ */
+function maskIp(text) {
+  return String(text || '')
+    .replace(/\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g, '$1.$2.***.***')
+    .replace(/\b(?:[0-9a-f]{1,4}:){2,}[0-9a-f]{0,4}\b/gi, 'x:x:x:x:x:x:x:x');
+}
+
 /** 时间范围边界 */
 function rangeBound(range) {
   const now = new Date();
@@ -56,7 +66,11 @@ router.get('/status', async (req, res, next) => {
     const ttl = Math.max(1, Number(settings.cache_ttl) || 5) * 1000;
     let data = cache.get('pub_status');
     if (!data) {
-      data = await attachSecurityStatus(await getSitesLatest());
+      data = (await attachSecurityStatus(await getSitesLatest())).map(s => ({
+        ...s,
+        // 前台保密：错误信息打码，且绝不包含 last_ip
+        last_error_msg: s.last_error_msg ? maskIp(s.last_error_msg) : s.last_error_msg
+      }));
       cache.set('pub_status', data, ttl);
     }
     // CDN / 浏览器缓存头（配合 CF 边缘缓存）
@@ -73,7 +87,11 @@ router.get('/status', async (req, res, next) => {
 router.get('/site/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const site = await queryOne('SELECT * FROM sites WHERE id = ?', [id]);
+    // 显式字段列表（不 SELECT *），last_ip 等敏感字段绝不返回前台
+    const site = await queryOne(
+      'SELECT id, name, domain, description, seo_title, seo_desc, seo_keywords, icon_url, enabled, maintenance, maintenance_note, sort, monitor_mode, expected_status, check_dns, check_cert, cert_warn_days, check_tcp, tcp_port, check_domain, domain_warn_days, check_headers, domain_expiry_override FROM sites WHERE id = ?',
+      [id]
+    );
     if (!site) return res.status(404).json({ code: 404, message: '站点不存在' });
 
     // 附带最新一次探测结果（last_*），供详情页顶部指标展示
@@ -133,6 +151,7 @@ router.get('/site/:id', async (req, res, next) => {
           const ex = getErrorExplain(f.error_code, f.error_msg);
           return {
             ...f,
+            error_msg: maskIp(f.error_msg),
             status_text: STATUS_TEXT[f.fault_status] || '异常',
             explain: { name: ex.name, cause: ex.cause, causes: ex.causes, tips: ex.tips, level: ex.level }
           };
@@ -184,6 +203,41 @@ router.get('/availability', async (req, res, next) => {
     }
     res.setHeader('Cache-Control', 'public, max-age=60');
     res.json({ code: 0, data: map });
+  } catch (e) { next(e); }
+});
+
+/* ---------------- 站点详情状态方块图（近 7 天每小时，前台展示） ---------------- */
+router.get('/site/:id(\\d+)/blocks', async (req, res, next) => {
+  try {
+    const siteId = Number(req.params.id);
+    const days = 7;
+    const hpd = 24;
+    const now = new Date();
+    const since = new Date(now.getTime() - (days - 1) * 86400 * 1000);
+    since.setHours(0, 0, 0, 0);
+    const rows = await query(
+      "SELECT DATE_FORMAT(checked_at, '%Y-%m-%d %H:00') AS h, status, COUNT(*) AS c FROM status_history WHERE site_id = ? AND checked_at >= ? GROUP BY DATE_FORMAT(checked_at, '%Y-%m-%d %H:00'), status",
+      [siteId, fmt(since)]
+    );
+    const best = {};
+    for (const r of rows) {
+      const key = String(r.h);
+      const status = Number(r.status);
+      const c = Number(r.c);
+      const cur = best[key];
+      if (!cur || c > cur.c || (c === cur.c && status !== 1)) best[key] = { status, c };
+    }
+    const out = [];
+    for (let d = days - 1; d >= 0; d--) {
+      const dt = new Date(now.getTime() - d * 86400 * 1000);
+      const day = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+      for (let hh = 0; hh < hpd; hh++) {
+        const key = day + ' ' + pad(hh) + ':00';
+        out.push({ time: key, status: best[key] ? best[key].status : 0 });
+      }
+    }
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.json({ code: 0, data: out });
   } catch (e) { next(e); }
 });
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>站点管理 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.4.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.5.0">
 </head>
 <body>
   <div id="admin-shell"></div>
@@ -89,9 +89,6 @@
                 <input type="checkbox" id="f-check-domain" class="w-4 h-4 accent-blue-600"><span>域名到期检测</span>
               </label>
               <label class="flex items-center gap-2.5 text-sm cursor-pointer">
-                <input type="checkbox" id="f-check-ocsp" class="w-4 h-4 accent-blue-600"><span>OCSP 吊销检测</span>
-              </label>
-              <label class="flex items-center gap-2.5 text-sm cursor-pointer">
                 <input type="checkbox" id="f-check-headers" class="w-4 h-4 accent-blue-600"><span>HTTP 安全头巡检</span>
               </label>
             </div>
@@ -110,7 +107,7 @@
               </div>
               <div>
                 <label class="block text-xs font-medium text-slate-500 mb-1">TCP 检测端口</label>
-                <input id="f-tcp-port" type="number" class="inp" min="1" max="65535">
+                <input id="f-tcp-port" type="number" class="inp" min="1" max="65535" placeholder="如 443(HTTPS)/3306(MySQL)">
               </div>
               <div>
                 <label class="block text-xs font-medium text-slate-500 mb-1">证书预警天数</label>
@@ -121,6 +118,11 @@
                 <label class="block text-xs font-medium text-slate-500 mb-1">域名预警天数</label>
                 <input id="f-domain-warn" type="number" class="inp" min="7" max="365" value="90" placeholder="剩余多少天提醒">
                 <p class="mt-1 text-[10px] text-slate-400">域名到期前 N 天开始预警</p>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">域名到期日期（可选，手动指定）</label>
+                <input id="f-domain-expiry" type="date" class="inp">
+                <p class="mt-1 text-[10px] text-slate-400">自动查询失败时用手动日期；留空则自动获取</p>
               </div>
             </div>
           </div>
@@ -135,7 +137,7 @@
     </div>
   </div>
 
-  <script src="/assets/js/common.js?v=2.4.0"></script>
+  <script src="/assets/js/common.js?v=2.5.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, t, tStatus, skeleton } = WebStatus;
@@ -271,13 +273,13 @@
         document.getElementById('f-check-cert').checked = Number(s.check_cert) === 1;
         document.getElementById('f-check-tcp').checked = Number(s.check_tcp) === 1;
         document.getElementById('f-check-domain').checked = Number(s.check_domain) === 1;
-        document.getElementById('f-check-ocsp').checked = Number(s.check_ocsp) === 1;
         document.getElementById('f-check-headers').checked = Number(s.check_headers) === 1;
         document.getElementById('f-monitor-mode').value = s.monitor_mode || 'http';
         document.getElementById('f-expected-status').value = s.expected_status || '';
         document.getElementById('f-tcp-port').value = s.tcp_port || '';
         document.getElementById('f-cert-warn').value = s.cert_warn_days || 30;
         document.getElementById('f-domain-warn').value = s.domain_warn_days || 90;
+        document.getElementById('f-domain-expiry').value = s.domain_expiry_override || '';
       }
 
       function openAdd() {
@@ -313,13 +315,13 @@
           check_cert: document.getElementById('f-check-cert').checked,
           check_tcp: document.getElementById('f-check-tcp').checked,
           check_domain: document.getElementById('f-check-domain').checked,
-          check_ocsp: document.getElementById('f-check-ocsp').checked,
           check_headers: document.getElementById('f-check-headers').checked,
           monitor_mode: document.getElementById('f-monitor-mode').value,
           expected_status: document.getElementById('f-expected-status').value ? Number(document.getElementById('f-expected-status').value) : null,
           tcp_port: document.getElementById('f-tcp-port').value ? Number(document.getElementById('f-tcp-port').value) : null,
           cert_warn_days: Number(document.getElementById('f-cert-warn').value) || 30,
-          domain_warn_days: Number(document.getElementById('f-domain-warn').value) || 90
+          domain_warn_days: Number(document.getElementById('f-domain-warn').value) || 90,
+          domain_expiry_override: document.getElementById('f-domain-expiry').value || null
         };
         const err = document.getElementById('form-err');
         try {

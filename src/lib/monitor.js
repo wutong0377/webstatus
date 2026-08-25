@@ -18,7 +18,7 @@ const { judgeStatus, STATUS } = require('./status');
 const settingsSvc = require('./settings');
 const mailer = require('./mailer');
 const alert = require('./alert');
-const { checkDns, checkCert, saveCertCheck, checkOcsp, checkSecurityHeaders } = require('./checks');
+const { checkDns, checkCert, saveCertCheck, checkSecurityHeaders } = require('./checks');
 const { checkDomainExpiry } = require('./whois');
 const { formatDateTime } = require('../utils/time');
 
@@ -206,6 +206,10 @@ async function checkSite(site, settings, result) {
      String(judged.errorMsg || probe.errorMsg || '').slice(0, 500), formatDateTime(),
      Math.round(probe.dnsMs || 0), Math.round(probe.tcpMs || 0), Math.round(probe.tlsMs || 0), Math.round(probe.ttfbMs || 0)]
   );
+  // 记录最近解析 IP（仅后台可见，前台保密）
+  if (probe.ip) {
+    await query('UPDATE sites SET last_ip = ? WHERE id = ?', [String(probe.ip).slice(0, 45), site.id]).catch(() => {});
+  }
 
   await processState(site, judged, probe, settings);
 
@@ -232,30 +236,21 @@ async function runEnhanceChecks(site) {
           '<br>签发机构：' + cert.issuer + '<br>有效期至：' + (cert.validTo || '-') + '<br>剩余：' + cert.daysLeft + ' 天'
       });
     }
-    // OCSP 证书吊销检测（独立开关）
-    if (Number(site.check_ocsp) === 1) {
-      const ocspRes = await checkOcsp(cert._rawCert, cert._rawIssuer);
-      // 保存吊销状态供页面展示（cert_checks.ocsp_status）
-      try {
-        await query('UPDATE cert_checks SET ocsp_status = ? WHERE site_id = ? ORDER BY id DESC LIMIT 1', [ocspRes.status, site.id]);
-      } catch (_) { /* 忽略更新失败 */ }
-      if (ocspRes.status === 3) {
-        await alert.sendAlert({
-          site,
-          alertType: 'cert_revoke',
-          level: 3,
-          title: '【证书吊销】' + site.name,
-          content: '站点 <strong>' + site.name + '</strong>（' + site.domain + '）<br>SSL 证书已被吊销：' + ocspRes.errorMsg
-        });
-      }
-    }
   }
 
   // 域名注册到期检测
   if (Number(site.check_domain) === 1) {
     let host = site.domain;
     try { host = new URL(site.domain).hostname; } catch (e) { /* keep */ }
-    const dom = await checkDomainExpiry(host);
+    let dom;
+    if (site.domain_expiry_override) {
+      // 手动到期日期优先：不依赖 RDAP/WHOIS，保证能算剩余天数发提醒
+      const expiry = new Date(String(site.domain_expiry_override));
+      const daysLeft = Math.floor((expiry.getTime() - Date.now()) / 86400000);
+      dom = { ok: true, status: daysLeft < 0 ? 3 : 1, expiryDate: formatDateTime(expiry), daysLeft, registrar: '手动设置', errorCode: '', errorMsg: '' };
+    } else {
+      dom = await checkDomainExpiry(host);
+    }
     await saveDomainCheck(site, host, dom);
     const warnDays = Number(site.domain_warn_days) || 90;
     if (dom.status !== 1 && (dom.status === 3 || dom.daysLeft <= warnDays)) {

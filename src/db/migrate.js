@@ -221,6 +221,14 @@ const MIGRATIONS = [
         KEY idx_sec_site (site_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='HTTP安全头巡检'`);
     }
+  },
+  {
+    version: 7,
+    name: 'v2.5 保密与域名：sites 增加 last_ip / domain_expiry_override',
+    up: async (conn) => {
+      await addColumnIfMissing(conn, 'sites', 'last_ip', "VARCHAR(45) NOT NULL DEFAULT '' COMMENT '最近一次解析到的IP(仅后台可见,前台保密)'");
+      await addColumnIfMissing(conn, 'sites', 'domain_expiry_override', "DATE NULL COMMENT '域名到期日期手动覆盖(自动查询失败时使用)'");
+    }
   }
 ];
 

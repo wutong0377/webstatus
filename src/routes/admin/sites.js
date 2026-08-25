@@ -38,8 +38,8 @@ function parseSiteFields(body) {
     monitorMode: ['http', 'tcp', 'icmp'].includes(body.monitor_mode) ? body.monitor_mode : 'http',
     checkDomain: bool(body.check_domain),
     domainWarnDays: int(body.domain_warn_days, { min: 7, max: 365, def: 90, name: '域名预警天数' }),
-    checkOcsp: bool(body.check_ocsp),
-    checkHeaders: bool(body.check_headers)
+    checkHeaders: bool(body.check_headers),
+    domainExpiryOverride: body.domain_expiry_override ? str(body.domain_expiry_override, 20, '域名到期日期') : null
   };
 }
 
@@ -48,7 +48,7 @@ const SITE_COLS = [
   'name', 'domain', 'description', 'seo_title', 'seo_desc', 'seo_keywords',
   'icon_url', 'enabled', 'maintenance', 'maintenance_note', 'sort',
   'alert_enabled', 'expected_status', 'check_dns', 'check_cert', 'cert_warn_days',
-  'check_tcp', 'tcp_port', 'monitor_mode', 'check_domain', 'domain_warn_days', 'check_ocsp', 'check_headers'
+  'check_tcp', 'tcp_port', 'monitor_mode', 'check_domain', 'domain_warn_days', 'check_headers', 'domain_expiry_override'
 ];
 /** 与 SITE_COLS 顺序一致的值数组 */
 function siteValues(f) {
@@ -56,7 +56,7 @@ function siteValues(f) {
     f.name, f.domain, f.description, f.seoTitle, f.seoDesc, f.seoKeywords,
     f.iconUrl, f.enabled ? 1 : 0, f.maintenance ? 1 : 0, f.maintenanceNote, f.sort,
     f.alertEnabled ? 1 : 0, f.expectedStatus, f.checkDns ? 1 : 0, f.checkCert ? 1 : 0, f.certWarnDays,
-    f.checkTcp ? 1 : 0, f.tcpPort, f.monitorMode, f.checkDomain ? 1 : 0, f.domainWarnDays, f.checkOcsp ? 1 : 0, f.checkHeaders ? 1 : 0
+    f.checkTcp ? 1 : 0, f.tcpPort, f.monitorMode, f.checkDomain ? 1 : 0, f.domainWarnDays, f.checkHeaders ? 1 : 0, f.domainExpiryOverride
   ];
 }
 
@@ -71,6 +71,15 @@ function invalidateCache() {
 router.get('/', async (req, res, next) => {
   try {
     const data = await attachSecurityStatus(await getSitesLatest());
+    // 后台可见：附加最近解析 IP（前台保密，不返回）
+    const ids = data.map(s => s.id);
+    if (ids.length) {
+      const inClause = ids.map(() => '?').join(',');
+      const ipRows = await query('SELECT id, last_ip FROM sites WHERE id IN (' + inClause + ')', ids).catch(() => []);
+      const ipMap = {};
+      for (const r of ipRows) ipMap[r.id] = r.last_ip;
+      for (const s of data) s.last_ip = ipMap[s.id] || '';
+    }
     res.json({ code: 0, data, maxSites: MAX_SITES });
   } catch (e) { next(e); }
 });

@@ -55,6 +55,11 @@ app.use(session({
 // 静态资源
 app.use('/assets', express.static(path.join(VIEWS, 'assets'), { maxAge: '1d' }));
 
+// robots.txt：禁止搜索引擎收录后台 / 安装向导 / API（主服务器保密）
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send('User-agent: *\nDisallow: /admin\nDisallow: /install\nDisallow: /api\n');
+});
+
 // ---------------- 路由装配 ----------------
 if (!config.installed) {
   // 未安装：仅安装向导
