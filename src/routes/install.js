@@ -39,24 +39,38 @@ router.get('/', (req, res) => res.sendFile(path.join(VIEWS_DIR, 'install.html'))
 /* ------------------- 同源校验（安装阶段 CSRF 防护） ------------------- */
 /**
  * 安装向导在登录建立会话之前开放，传统 CSRF Token 机制在早期步骤（无会话）下不可用。
- * 这里对全部写请求做 Origin/Host 同源校验：
- *   - 现代浏览器跨站 POST 必定携带 Origin 头，非本机 Host 一律拒绝；
- *   - 无 Origin 的请求（curl/脚本）放行，避免影响自动化部署。
+ * 这里对全部写请求做 Origin/Host 同源校验，并兼容反向代理场景：
+ *   - Origin 与请求 Host 一致 → 放行（正常同源）；
+ *   - 浏览器 Origin 是公网地址、而 Node 侧 Host 被 Nginx/宝塔代理改写为内网地址 → 放行；
+ *   - Origin 与 Host 均为公网但不一致 → 判定为跨站请求，拒绝（防 CSRF 诱导完成安装）；
+ *   - 无 Origin（curl/脚本）或 Origin 为 null/不可解析 → 放行，避免误伤安装流程。
  */
+function isInternalHost(host) {
+  const h = String(host || '').toLowerCase().split(':')[0];
+  if (h === 'localhost' || h === '::1' || h.startsWith('::ffff:') || h === '') return true;
+  const p = h.split('.').map(Number);
+  if (p.length === 4 && p.every(n => !isNaN(n))) {
+    if (p[0] === 127 || p[0] === 10 || p[0] === 0) return true;
+    if (p[0] === 192 && p[1] === 168) return true;
+    if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return true;
+  }
+  return false;
+}
+
 function sameOriginCheck(req, res, next) {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
   const origin = req.headers.origin;
-  if (origin) {
-    try {
-      const u = new URL(origin);
-      if (u.host !== (req.headers.host || '')) {
-        return res.status(403).json({ code: 403, message: '来源校验失败，请从安装向导页面操作' });
-      }
-    } catch (e) {
-      return res.status(403).json({ code: 403, message: '来源校验失败，请从安装向导页面操作' });
-    }
-  }
-  next();
+  if (!origin || origin === 'null') return next();
+  let originHost;
+  try { originHost = new URL(origin).host.toLowerCase(); }
+  catch (e) { return next(); } // Origin 不可解析不阻断安装
+  const hostHeader = String(req.headers.host || '').toLowerCase();
+
+  if (originHost === hostHeader) return next();
+  // 反代场景：Origin 为公网，Host 被改写为内网 → 放行
+  if (isInternalHost(hostHeader) && !isInternalHost(originHost)) return next();
+  // 其余：跨站请求，拒绝
+  return res.status(403).json({ code: 403, message: '来源校验失败，请从安装向导页面操作' });
 }
 router.use(sameOriginCheck);
 
