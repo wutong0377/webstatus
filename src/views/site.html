@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>站点详情 - WebStatus</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/assets/css/app.css?v=1.1.2">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -70,7 +70,7 @@
     <div id="ws-copyright"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=1.1.2"></script>
+  <script src="/assets/js/common.js?v=2.0.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
@@ -132,7 +132,8 @@
       if (sk) sk.remove();
       canvas.classList.remove('hidden');
       const labels = (points || []).map(p => String(p.checked_at || '').slice(5, 16));
-      const data = (points || []).map(p => p.delay);
+      // 离线(3)/维修(4) 延迟按 0ms 展示，但颜色分别用红/蓝
+      const data = (points || []).map(p => (Number(p.status) === 3 || Number(p.status) === 4) ? 0 : p.delay);
       const colors = (points || []).map(p => statusColor(p.status));
       const ctx = canvas.getContext('2d');
       if (chart) chart.destroy();
@@ -147,11 +148,20 @@
             borderColor: colors,
             backgroundColor: 'rgba(59,130,246,0.08)',
             pointBackgroundColor: colors,
-            pointRadius: small ? 0 : 2,
+            pointBorderColor: colors,
+            pointRadius: small ? 0 : 2.5,
             pointHoverRadius: small ? 3 : 4,
             borderWidth: 1.5,
-            tension: 0.25,
-            fill: true
+            tension: 0.15,
+            fill: true,
+            // 关键：按状态逐段着色（Chart.js 数组 borderColor 对线段不生效，需用 segment 回调）
+            segment: {
+              borderColor: seg => {
+                const idx = seg.p0DataIndex != null ? seg.p0DataIndex : 0;
+                const p = (points || [])[idx];
+                return statusColor(p ? Number(p.status) : 1);
+              }
+            }
           }]
         },
         options: {
@@ -166,7 +176,8 @@
                 label: ctx => {
                   const p = (points || [])[ctx.dataIndex];
                   if (!p) return '';
-                  return t('site.tooltipDelay') + ' ' + p.delay + ' ms · ' + tStatus(p.status);
+                  const d = (Number(p.status) === 3 || Number(p.status) === 4) ? 0 : p.delay;
+                  return t('site.tooltipDelay') + ' ' + d + ' ms · ' + tStatus(p.status);
                 }
               }
             }

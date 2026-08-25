@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>版本更新 - WebStatus</title>
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+  <div id="admin-shell"></div>
+  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script>
+  (() => {
+    const { api, esc, h, icon, toast, t } = WebStatus;
+    const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
+
+    (async () => {
+      const main = await WebStatus.renderAdminShell('/admin/version');
+      const page = h('div', 'px-4 sm:px-6 py-6 max-w-3xl mx-auto space-y-6');
+      main.appendChild(page);
+      page.appendChild(h('h1', 'text-xl font-bold', t('nav.version')));
+
+      /* ---------- 当前版本信息 ---------- */
+      const infoBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-3');
+      page.appendChild(infoBox);
+
+      const row = (label, value, mono) => h('div', 'flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0',
+        '<span class="text-sm text-slate-500">' + esc(label) + '</span>' +
+        '<span class="text-sm font-medium text-slate-800 dark:text-slate-100 ' + (mono ? 'font-mono' : '') + '">' + value + '</span>');
+
+      const curRow = h('div', 'flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0');
+      curRow.appendChild(h('span', 'text-sm text-slate-500', esc(t('version.current'))));
+      const curVal = h('span', 'inline-flex items-center gap-2');
+      curVal.innerHTML = '<span class="px-2.5 py-1 rounded-full text-sm font-bold bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400">--</span>';
+      curRow.appendChild(curVal);
+      infoBox.appendChild(curRow);
+
+      const commitRow = h('div', 'flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-800');
+      commitRow.appendChild(h('span', 'text-sm text-slate-500', esc(t('version.gitCommit'))));
+      const commitVal = h('span', 'text-sm font-mono text-slate-800 dark:text-slate-100', '-');
+      commitRow.appendChild(commitVal);
+      infoBox.appendChild(commitRow);
+
+      const atRow = h('div', 'flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0');
+      atRow.appendChild(h('span', 'text-sm text-slate-500', esc(t('version.gitAt'))));
+      const atVal = h('span', 'text-sm text-slate-800 dark:text-slate-100', '-');
+      atRow.appendChild(atVal);
+      infoBox.appendChild(atRow);
+
+      const repoRow = h('div', 'flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0');
+      repoRow.appendChild(h('span', 'text-sm text-slate-500', esc(t('version.repo'))));
+      repoRow.appendChild(h('a', 'text-sm text-blue-600 dark:text-blue-400 hover:underline', 'github.com/wutong0377/webstatus'));
+      repoRow.lastChild.href = 'https://github.com/wutong0377/webstatus';
+      repoRow.lastChild.target = '_blank';
+      repoRow.lastChild.rel = 'noopener';
+      infoBox.appendChild(repoRow);
+
+      /* ---------- 检查更新 ---------- */
+      const updBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
+      page.appendChild(updBox);
+      updBox.appendChild(h('p', 'text-xs text-slate-400 mb-4', esc(t('version.updateTips'))));
+
+      const updResult = h('div', 'text-sm space-y-3');
+      updBox.appendChild(updResult);
+
+      const checkBtn = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium hover:opacity-90', t('version.checkUpdate'));
+      updBox.appendChild(checkBtn);
+
+      checkBtn.addEventListener('click', async () => {
+        checkBtn.disabled = true;
+        checkBtn.textContent = t('version.checking');
+        updResult.innerHTML = '';
+        try {
+          const r = await api('/api/admin/version/check-update');
+          const d = r.data || {};
+          if (d.error) {
+            updResult.appendChild(h('div', 'text-amber-600 dark:text-amber-400', esc(d.error)));
+          } else {
+            updResult.appendChild(h('div', 'flex items-center gap-2',
+              '<span class="text-slate-500">' + esc(t('version.current')) + '：</span><span class="font-mono font-medium">' + esc(d.current || '-') + '</span>' +
+              '<span class="text-slate-400 mx-1">→</span>' +
+              '<span class="text-slate-500">' + esc(t('version.latest')) + '：</span><span class="font-mono font-medium">' + esc(d.latest || '-') + '</span>'));
+            if (d.hasUpdate && d.url) {
+              const box = h('div', 'mt-2 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 flex items-center justify-between gap-3 flex-wrap');
+              box.appendChild(h('span', 'text-amber-700 dark:text-amber-400', esc(t('version.hasUpdate'))));
+              const link = h('a', 'px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:opacity-90', t('version.download'));
+              link.href = d.url; link.target = '_blank'; link.rel = 'noopener';
+              box.appendChild(link);
+              updResult.appendChild(box);
+            } else {
+              updResult.appendChild(h('div', 'mt-2 text-emerald-600 dark:text-emerald-400', esc(t('version.noUpdate'))));
+            }
+          }
+        } catch (e) {
+          updResult.appendChild(h('div', 'text-red-600 dark:text-red-400', esc(t('version.checkFailed') + '：' + e.message)));
+        }
+        checkBtn.disabled = false;
+        checkBtn.textContent = t('version.checkUpdate');
+      });
+
+      /* ---------- 加载版本信息 ---------- */
+      try {
+        const r = await api('/api/admin/version/info');
+        const d = r.data || {};
+        curVal.innerHTML = '<span class="px-2.5 py-1 rounded-full text-sm font-bold bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400">' + esc(d.version || '-') + '</span>';
+        commitVal.textContent = d.gitCommit || '-';
+        atVal.textContent = d.gitCommitAt || '-';
+      } catch (e) {
+        curVal.textContent = '-';
+      }
+
+      document.addEventListener('ws-langchange', () => {
+        checkBtn.textContent = t('version.checkUpdate');
+      });
+    })();
+  })();
+  </script>
+</body>
+</html>

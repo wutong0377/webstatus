@@ -175,6 +175,7 @@ const WebStatus = (() => {
     'nav.sessions': { zh: '会话管理', en: 'Sessions' },
     'nav.report': { zh: '报表中心', en: 'Reports' },
     'nav.alerts': { zh: '告警设置', en: 'Alerts' },
+    'nav.version': { zh: '版本更新', en: 'Version' },
     'nav.front': { zh: '查看前台', en: 'View Front' },
     'admin.console': { zh: '运维控制台', en: 'Console' },
     'logout': { zh: '退出', en: 'Logout' },
@@ -379,7 +380,20 @@ const WebStatus = (() => {
     'settings.confirm.run': { zh: '确定立即执行一轮完整巡检？', en: 'Run a full monitor round now?' },
     'settings.confirm.clearHistory': { zh: '确定清空全部监控历史数据？此操作不可恢复！', en: 'Clear all monitoring history? This cannot be undone!' },
     'settings.confirm.clearFaults': { zh: '确定清空全部故障日志？此操作不可恢复！', en: 'Clear all fault logs? Cannot be undone!' },
-    'settings.confirm.clearMails': { zh: '确定清空全部邮件发送日志？此操作不可恢复！', en: 'Clear all mail logs? Cannot be undone!' }
+    'settings.confirm.clearMails': { zh: '确定清空全部邮件发送日志？此操作不可恢复！', en: 'Clear all mail logs? Cannot be undone!' },
+
+    'version.current': { zh: '当前版本', en: 'Current version' },
+    'version.gitCommit': { zh: 'Git 提交', en: 'Git commit' },
+    'version.gitAt': { zh: '提交时间', en: 'Committed at' },
+    'version.checkUpdate': { zh: '检查更新', en: 'Check for updates' },
+    'version.checking': { zh: '检查中...', en: 'Checking...' },
+    'version.latest': { zh: '最新版本', en: 'Latest version' },
+    'version.hasUpdate': { zh: '发现新版本，请前往 GitHub 下载更新', en: 'New version available, download from GitHub' },
+    'version.noUpdate': { zh: '已是最新版本', en: 'Already up to date' },
+    'version.download': { zh: '前往 GitHub 下载', en: 'Go to GitHub Releases' },
+    'version.checkFailed': { zh: '检查更新失败', en: 'Update check failed' },
+    'version.repo': { zh: '开源仓库', en: 'Repository' },
+    'version.updateTips': { zh: '更新前请先导出数据库备份，更新包替换后重启服务即可。', en: 'Export a DB backup before updating; restart after replacing files.' }
   };
 
   function t(key) {
@@ -472,7 +486,7 @@ const WebStatus = (() => {
     }
     const host = container || document.getElementById('ws-copyright');
     if (host) {
-      host.innerHTML = '<a href="' + GITHUB + '" target="_blank" rel="noopener" class="hover:underline">©️ ' + AUTHOR + '</a><span class="mx-1">·</span>QQ ' + QQ;
+      host.innerHTML = '<a href="' + GITHUB + '" target="_blank" rel="noopener" class="hover:underline">© ' + AUTHOR + '</a><span class="mx-1">·</span>QQ ' + QQ;
     }
   }
 
@@ -488,7 +502,8 @@ const WebStatus = (() => {
     { path: '/admin/accounts', label: '账号管理', key: 'nav.accounts', icon: 'shield' },
     { path: '/admin/sessions', label: '会话管理', key: 'nav.sessions', icon: 'clock' },
     { path: '/admin/report', label: '报表中心', key: 'nav.report', icon: 'fileText' },
-    { path: '/admin/alerts', label: '告警设置', key: 'nav.alerts', icon: 'alertTriangle' }
+    { path: '/admin/alerts', label: '告警设置', key: 'nav.alerts', icon: 'alertTriangle' },
+    { path: '/admin/version', label: '版本更新', key: 'nav.version', icon: 'gear' }
   ];
 
   /**

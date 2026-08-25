@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>故障日志 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=1.1.2">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
 </head>
 <body>
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js?v=1.1.2"></script>
+  <script src="/assets/js/common.js?v=2.0.0"></script>
   <script>
   (() => {
     const { api, esc, h, toast, t } = WebStatus;
@@ -48,6 +48,157 @@
 
       const pager = h('div', 'mt-4 flex items-center justify-between gap-3 flex-wrap');
       box.appendChild(pager);
+
+      /* ================= 手动故障事件（v2） ================= */
+      const mfBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 mt-5');
+      page.appendChild(mfBox);
+      mfBox.appendChild(h('div', 'text-sm font-semibold mb-1', '手动故障事件'));
+      mfBox.appendChild(h('p', 'text-xs text-slate-400 mb-4', '用于记录不经过自动检测的维护 / 故障事件，会计入报表与导出。'));
+
+      const mfForm = h('div', 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-5');
+      const mfSite = h('select', sel);
+      mfSite.innerHTML = '<option value="">站点 *</option>';
+      const mfTitle = h('input', inp);
+      mfTitle.placeholder = '标题 *';
+      mfTitle.maxLength = 200;
+      const mfDesc = h('input', inp);
+      mfDesc.placeholder = '故障说明';
+      mfDesc.maxLength = 5000;
+      const mfProg = h('input', inp);
+      mfProg.placeholder = '处理进度';
+      mfProg.maxLength = 50;
+      const mfStatusWrap = h('label', 'flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm cursor-pointer');
+      const mfStatus = h('input', 'accent-emerald-600');
+      mfStatus.type = 'checkbox';
+      mfStatusWrap.appendChild(mfStatus);
+      mfStatusWrap.appendChild(h('span', 'text-xs text-slate-500', '已解决'));
+      const mfBtn = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '添加故障');
+      mfBtn.id = 'mf-submit';
+      const mfCancel = h('button', 'px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium hidden', '取消');
+      mfForm.appendChild(mfSite);
+      mfForm.appendChild(mfTitle);
+      mfForm.appendChild(mfDesc);
+      mfForm.appendChild(mfProg);
+      mfForm.appendChild(mfStatusWrap);
+      const mfBtnWrap = h('div', 'flex items-center gap-2');
+      mfBtnWrap.appendChild(mfBtn);
+      mfBtnWrap.appendChild(mfCancel);
+      mfForm.appendChild(mfBtnWrap);
+      mfBox.appendChild(mfForm);
+
+      const mfList = h('div', 'space-y-2');
+      mfBox.appendChild(mfList);
+      const mfPager = h('div', 'mt-4 flex items-center justify-between gap-3 flex-wrap');
+      mfBox.appendChild(mfPager);
+
+      let mfPage = 1;
+      let mfTotal = 0;
+      let mfEditId = 0;
+
+      api('/api/admin/settings/site-options').then(r => {
+        (r.data || []).forEach(s => {
+          const op = h('option', '', esc(s.name)); op.value = s.id; mfSite.appendChild(op);
+        });
+      }).catch(() => {});
+
+      function resetMfForm() {
+        mfEditId = 0;
+        mfSite.value = '';
+        mfTitle.value = '';
+        mfDesc.value = '';
+        mfProg.value = '';
+        mfStatus.checked = false;
+        mfBtn.textContent = '添加故障';
+        mfCancel.classList.add('hidden');
+      }
+
+      function fillMfForm(f) {
+        mfEditId = f.id;
+        mfSite.value = f.site_id;
+        mfTitle.value = f.title || '';
+        mfDesc.value = f.description || '';
+        mfProg.value = f.progress || '';
+        mfStatus.checked = Number(f.status) === 1;
+        mfBtn.textContent = '保存修改';
+        mfCancel.classList.remove('hidden');
+        mfBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      async function loadMf(page) {
+        try {
+          const r = await api('/api/admin/report/manual-faults?page=' + (page || 1) + '&size=10');
+          mfPage = r.page || 1;
+          mfTotal = r.total || 0;
+          mfList.innerHTML = '';
+          if (!(r.data || []).length) {
+            mfList.appendChild(h('div', 'text-center py-6 text-slate-400 text-sm', '暂无手动故障记录'));
+          }
+          (r.data || []).forEach(f => {
+            const el = h('div', 'border border-slate-200 dark:border-slate-800 rounded-xl p-3.5');
+            const top = h('div', 'flex items-center gap-2 flex-wrap');
+            top.appendChild(h('span', 'px-2 py-0.5 rounded-full text-xs ' + (Number(f.status) === 1
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+              : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'),
+              Number(f.status) === 1 ? '已解决' : '处理中'));
+            top.appendChild(h('span', 'font-medium text-sm', esc(f.title)));
+            top.appendChild(h('span', 'text-xs text-slate-400', esc(f.site_name || ('#' + f.site_id))));
+            top.appendChild(h('span', 'text-xs text-slate-400 ml-auto tabular', esc(f.created_at)));
+            el.appendChild(top);
+            if (f.description) el.appendChild(h('div', 'mt-1.5 text-xs text-slate-500 break-all', esc(f.description)));
+            if (f.progress) el.appendChild(h('div', 'mt-1 text-xs text-slate-400', '进度：' + esc(f.progress)));
+            const act = h('div', 'mt-2 flex gap-2');
+            const eBtn = h('button', 'px-2.5 py-1 rounded-lg text-xs text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800', '编辑');
+            eBtn.addEventListener('click', () => fillMfForm(f));
+            const dBtn = h('button', 'px-2.5 py-1 rounded-lg text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10', '删除');
+            dBtn.addEventListener('click', async () => {
+              if (!confirm('确定删除故障事件「' + f.title + '」吗？')) return;
+              try {
+                await api('/api/admin/report/manual-faults/' + f.id + '/delete', { method: 'POST' });
+                toast('已删除', 'success');
+                loadMf((mfTotal === 1 && mfPage > 1) ? mfPage - 1 : mfPage);
+              } catch (e) { toast(e.message, 'error'); }
+            });
+            act.appendChild(eBtn);
+            act.appendChild(dBtn);
+            el.appendChild(act);
+            mfList.appendChild(el);
+          });
+          const pages = Math.max(1, Math.ceil(mfTotal / 10));
+          mfPager.innerHTML = '';
+          mfPager.appendChild(h('span', 'text-xs text-slate-400', '共 ' + mfTotal + ' 条 · 第 ' + mfPage + '/' + pages + ' 页'));
+          const btns = h('div', 'flex gap-2');
+          const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', t('common.prevPage'));
+          prev.disabled = mfPage <= 1;
+          prev.addEventListener('click', () => loadMf(mfPage - 1));
+          const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs disabled:opacity-40', t('common.nextPage'));
+          next.disabled = mfPage >= pages;
+          next.addEventListener('click', () => loadMf(mfPage + 1));
+          btns.appendChild(prev);
+          btns.appendChild(next);
+          mfPager.appendChild(btns);
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      mfBtn.addEventListener('click', async () => {
+        const body = {
+          site_id: Number(mfSite.value) || 0,
+          title: mfTitle.value.trim(),
+          description: mfDesc.value.trim(),
+          progress: mfProg.value.trim() || '处理中',
+          status: mfStatus.checked
+        };
+        if (!body.site_id) { toast('请选择站点', 'error'); return; }
+        if (!body.title) { toast('请填写标题', 'error'); return; }
+        try {
+          if (mfEditId) await api('/api/admin/report/manual-faults/' + mfEditId + '/update', { method: 'POST', body });
+          else await api('/api/admin/report/manual-faults/create', { method: 'POST', body });
+          toast(mfEditId ? '已更新' : '已添加', 'success');
+          resetMfForm();
+          loadMf(1);
+        } catch (e) { toast(e.message, 'error'); }
+      });
+      mfCancel.addEventListener('click', resetMfForm);
+      loadMf(1);
 
       let pageNum = 1;
       let total = 0;

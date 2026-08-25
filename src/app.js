@@ -95,7 +95,7 @@ if (!config.installed) {
   app.get(['/admin', '/admin/'], (req, res) => res.redirect('/admin/dashboard'));
   app.get('/admin/:page', (req, res) => {
     // 白名单页面，防路径穿越
-    const allowed = ['dashboard', 'sites', 'notices', 'mail', 'mail-logs', 'fault-logs', 'settings', 'accounts', 'sessions', 'report', 'alerts'];
+    const allowed = ['dashboard', 'sites', 'notices', 'mail', 'mail-logs', 'fault-logs', 'settings', 'accounts', 'sessions', 'report', 'alerts', 'version'];
     if (!allowed.includes(req.params.page)) return res.status(404).send('Not Found');
     res.sendFile(path.join(VIEWS, 'admin', req.params.page + '.html'));
   });

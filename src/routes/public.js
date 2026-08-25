@@ -68,6 +68,29 @@ router.get('/site/:id', async (req, res, next) => {
     const site = await queryOne('SELECT * FROM sites WHERE id = ?', [id]);
     if (!site) return res.status(404).json({ code: 404, message: '站点不存在' });
 
+    // 附带最新一次探测结果（last_*），供详情页顶部指标展示
+    const last = await queryOne(
+      'SELECT status, delay, http_code, error_code, error_msg, checked_at FROM status_history WHERE site_id = ? ORDER BY id DESC LIMIT 1',
+      [id]
+    );
+    if (last) {
+      site.last_status = last.status;
+      site.last_delay = last.delay;
+      site.last_http_code = last.http_code;
+      site.last_error_code = last.error_code;
+      site.last_error_msg = last.error_msg;
+      site.last_checked_at = last.checked_at;
+    } else {
+      site.last_status = null;
+      site.last_delay = null;
+      site.last_http_code = null;
+      site.last_error_code = null;
+      site.last_error_msg = null;
+      site.last_checked_at = null;
+    }
+    // 统一 status：维修模式强制 4，否则取最新探测状态
+    site.status = site.maintenance === 1 ? 4 : (site.last_status || null);
+
     const range = ['hour', 'day', 'week', 'month'].includes(req.query.range) ? req.query.range : 'day';
     const settings = await settingsSvc.getAll();
     const ttl = Math.max(1, Number(settings.cache_ttl) || 5) * 1000;

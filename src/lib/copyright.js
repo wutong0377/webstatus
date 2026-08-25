@@ -32,7 +32,7 @@ function copyrightData() {
 /** 页脚版权 HTML（署名链接到 GitHub 主页） */
 function copyrightHTML() {
   const d = copyrightData();
-  return '<a href="' + d.github + '" target="_blank" rel="noopener">©️ ' + d.author + '</a> · QQ ' + d.qq;
+  return '<a href="' + d.github + '" target="_blank" rel="noopener">© ' + d.author + '</a> · QQ ' + d.qq;
 }
 
 module.exports = { verifyCopyright, copyrightData, copyrightHTML, COPYRIGHT_STR };

@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>系统设置 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=1.1.2">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
 </head>
 <body>
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js?v=1.1.2"></script>
+  <script src="/assets/js/common.js?v=2.0.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, t } = WebStatus;
@@ -46,7 +46,9 @@
         : t('settings.confirm.clearMails');
       if (!confirm(confirmText)) return;
       try {
-        const r = await api('/api/admin/settings/' + key, { method: 'POST' });
+        // 手动触发巡检的后端路由是 /run-check（前端按钮 key 为 run）
+        const route = key === 'run' ? 'run-check' : key;
+        const r = await api('/api/admin/settings/' + route, { method: 'POST' });
         toast(r.message || '操作成功', 'success');
         if (key === 'run' && r.data) {
           toast('本轮：' + r.data.total + ' 站，正常 ' + r.data.up + '，卡顿 ' + r.data.slow + '，离线 ' + r.data.down, 'success');

@@ -3,18 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>报表 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=1.1.2">
+  <title>报表中心 - WebStatus 管理后台</title>
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
 </head>
-<body>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
   <div id="admin-shell"></div>
-
-  <script src="/assets/js/common.js?v=1.1.2"></script>
+  <script src="/assets/js/common.js?v=2.0.0"></script>
   <script>
   (() => {
     const { api, esc, h, toast } = WebStatus;
     const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
-    document.querySelectorAll('.inp').forEach(e => e.className = e.className.replace('inp', '') + ' ' + inp);
 
     const BLOCK_BG = {
       0: 'bg-slate-200 dark:bg-slate-700',
@@ -27,10 +25,6 @@
 
     let sites = [];
     let avDays = 7;
-    let faults = [];
-    let faultPage = 1;
-    let faultTotal = 0;
-    let editId = 0;
 
     (async () => {
       const main = await WebStatus.renderAdminShell('/admin/report');
@@ -75,80 +69,6 @@
       blockGrid.id = 'block-grid';
       blockBox.appendChild(blockGrid);
 
-      /* ---------- 手动故障 ---------- */
-      const faultBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
-      page.appendChild(faultBox);
-      faultBox.appendChild(h('div', 'text-sm font-semibold mb-4', '手动故障事件'));
-      faultBox.appendChild(h('div', 'text-xs text-slate-400 mb-3', '用于记录不经过自动检测的维护 / 故障事件，会计入报表与导出。'));
-
-      const form = h('div', 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5');
-      const fSiteWrap = h('div', '');
-      fSiteWrap.appendChild(h('label', 'block text-xs font-medium text-slate-500 mb-1', '站点 *'));
-      const fSite = h('select', inp);
-      fSite.id = 'mf-site';
-      fSite.innerHTML = '<option value="">请选择</option>';
-      fSiteWrap.appendChild(fSite);
-      form.appendChild(fSiteWrap);
-
-      const fTitleWrap = h('div', '');
-      fTitleWrap.appendChild(h('label', 'block text-xs font-medium text-slate-500 mb-1', '标题 *'));
-      const fTitle = h('input', inp);
-      fTitle.id = 'mf-title';
-      fTitle.maxLength = 200;
-      fTitleWrap.appendChild(fTitle);
-      form.appendChild(fTitleWrap);
-
-      const fDescWrap = h('div', 'lg:col-span-2');
-      fDescWrap.appendChild(h('label', 'block text-xs font-medium text-slate-500 mb-1', '描述'));
-      const fDesc = h('input', inp);
-      fDesc.id = 'mf-desc';
-      fDesc.maxLength = 500;
-      fDescWrap.appendChild(fDesc);
-      form.appendChild(fDescWrap);
-
-      const fProgWrap = h('div', '');
-      fProgWrap.appendChild(h('label', 'block text-xs font-medium text-slate-500 mb-1', '进度'));
-      const fProg = h('input', inp);
-      fProg.id = 'mf-progress';
-      fProg.maxLength = 50;
-      fProg.value = '处理中';
-      fProgWrap.appendChild(fProg);
-      form.appendChild(fProgWrap);
-
-      const fStatusWrap = h('div', 'flex items-end');
-      const fStatusLabel = h('label', 'flex items-center gap-2 text-sm cursor-pointer');
-      const fStatus = h('input');
-      fStatus.type = 'checkbox';
-      fStatus.id = 'mf-status';
-      fStatus.className = 'w-4 h-4 accent-blue-600';
-      fStatusLabel.appendChild(fStatus);
-      fStatusLabel.appendChild(h('span', '', '已解决'));
-      fStatusWrap.appendChild(fStatusLabel);
-      form.appendChild(fStatusWrap);
-
-      const submitRow = h('div', 'flex items-center gap-2');
-      const fSubmit = h('button', 'px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '添加故障');
-      submitRow.appendChild(fSubmit);
-      const fCancel = h('button', 'hidden px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium', '取消编辑');
-      fCancel.id = 'mf-cancel';
-      submitRow.appendChild(fCancel);
-      faultBox.appendChild(form);
-      faultBox.appendChild(submitRow);
-
-      const faultListBox = h('div', 'mt-4');
-      faultBox.appendChild(faultListBox);
-      const faultTable = h('table', 'w-full text-sm');
-      faultTable.innerHTML = '<thead><tr class="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-slate-800">' +
-        '<th class="px-4 py-2.5 font-medium">标题</th><th class="px-4 py-2.5 font-medium">站点</th>' +
-        '<th class="px-4 py-2.5 font-medium">进度</th><th class="px-4 py-2.5 font-medium">状态</th>' +
-        '<th class="px-4 py-2.5 font-medium">创建时间</th><th class="px-4 py-2.5 font-medium text-right">操作</th></tr></thead>';
-      const faultBody = h('tbody', '');
-      faultTable.appendChild(faultBody);
-      faultListBox.appendChild(faultTable);
-      const pagination = h('div', 'flex items-center justify-between mt-3 text-sm');
-      pagination.id = 'fault-pager';
-      faultListBox.appendChild(pagination);
-
       /* ---------- 数据加载 ---------- */
       async function loadSites() {
         try {
@@ -156,7 +76,6 @@
           sites = r.data || [];
           const opts = sites.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
           siteSelect.innerHTML = '<option value="">请选择站点</option>' + opts;
-          fSite.innerHTML = '<option value="">请选择</option>' + opts;
         } catch (e) { toast(e.message, 'error'); }
       }
 
@@ -234,89 +153,6 @@
         } catch (e) { toast(e.message, 'error'); }
       }
 
-      function resetFaultForm() {
-        editId = 0;
-        fTitle.value = '';
-        fDesc.value = '';
-        fProg.value = '处理中';
-        fStatus.checked = false;
-        fSubmit.textContent = '添加故障';
-        fCancel.classList.add('hidden');
-      }
-
-      function fillFaultForm(f) {
-        editId = f.id;
-        fSite.value = f.site_id;
-        fTitle.value = f.title || '';
-        fDesc.value = f.description || '';
-        fProg.value = f.progress || '处理中';
-        fStatus.checked = Number(f.status) === 1;
-        fSubmit.textContent = '保存修改';
-        fCancel.classList.remove('hidden');
-        window.scrollTo({ top: faultBox.offsetTop - 100, behavior: 'smooth' });
-      }
-
-      function renderFaults() {
-        faultBody.innerHTML = '';
-        if (!faults.length) {
-          faultBody.appendChild(h('tr', '', '<td colspan="6" class="px-4 py-8 text-center text-slate-400">暂无手动故障记录</td>'));
-        }
-        faults.forEach(f => {
-          const tr = h('tr', 'border-b border-slate-100 dark:border-slate-800 last:border-0');
-          const cell = c => 'px-4 py-2.5 ' + c;
-          tr.appendChild(h('td', cell(''), '<div class="font-medium text-slate-700 dark:text-slate-200">' + esc(f.title) + '</div><div class="text-xs text-slate-400">' + esc(f.description || '') + '</div>'));
-          tr.appendChild(h('td', cell('text-xs text-slate-500'), esc(f.site_name || ('#' + f.site_id))));
-          tr.appendChild(h('td', cell('text-xs text-slate-500'), esc(f.progress || '-')));
-          tr.appendChild(h('td', cell(''),
-            Number(f.status) === 1
-              ? '<span class="px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400">已解决</span>'
-              : '<span class="px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400">处理中</span>'));
-          tr.appendChild(h('td', cell('text-xs text-slate-500'), esc(f.created_at)));
-          const act = h('td', cell('text-right whitespace-nowrap'));
-          const btnCls = 'px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-800';
-          const edit = h('button', btnCls + ' text-slate-600', '编辑');
-          edit.addEventListener('click', () => fillFaultForm(f));
-          act.appendChild(edit);
-          const del = h('button', btnCls + ' text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10', '删除');
-          del.addEventListener('click', () => doDeleteFault(f));
-          act.appendChild(del);
-          tr.appendChild(act);
-          faultBody.appendChild(tr);
-        });
-
-        const totalPages = Math.max(1, Math.ceil(faultTotal / 10));
-        pagination.innerHTML = '';
-        pagination.appendChild(h('span', 'text-xs text-slate-400', '共 ' + faultTotal + ' 条 · 第 ' + faultPage + '/' + totalPages + ' 页'));
-        const btns = h('div', 'flex items-center gap-2');
-        const prev = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs ' + (faultPage <= 1 ? 'opacity-40 cursor-not-allowed' : ''), '上一页');
-        if (faultPage > 1) prev.addEventListener('click', () => loadFaults(faultPage - 1));
-        btns.appendChild(prev);
-        const next = h('button', 'px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs ' + (faultPage >= totalPages ? 'opacity-40 cursor-not-allowed' : ''), '下一页');
-        if (faultPage < totalPages) next.addEventListener('click', () => loadFaults(faultPage + 1));
-        btns.appendChild(next);
-        pagination.appendChild(btns);
-      }
-
-      async function loadFaults(page) {
-        try {
-          const r = await api('/api/admin/report/manual-faults?page=' + (page || 1) + '&size=10');
-          faults = r.data || [];
-          faultPage = r.page || 1;
-          faultTotal = r.total || 0;
-          renderFaults();
-        } catch (e) { toast(e.message, 'error'); }
-      }
-
-      async function doDeleteFault(f) {
-        if (!confirm('确定删除故障事件「' + f.title + '」吗？')) return;
-        try {
-          await api('/api/admin/report/manual-faults/' + f.id + '/delete', { method: 'POST' });
-          toast('已删除', 'success');
-          if (faults.length === 1 && faultPage > 1) loadFaults(faultPage - 1);
-          else loadFaults(faultPage);
-        } catch (e) { toast(e.message, 'error'); }
-      }
-
       /* ---------- 事件绑定 ---------- */
       siteSelect.addEventListener('change', () => { loadAvailability(); loadBlocks(); });
       daysSelect.addEventListener('change', () => {
@@ -328,32 +164,10 @@
         if (!siteId) { toast('请先选择站点', 'error'); return; }
         window.open('/api/admin/report/export?site_id=' + siteId + '&days=' + avDays, '_blank');
       });
-      fCancel.addEventListener('click', resetFaultForm);
-
-      // 手动故障表单由 submitRow 提交
-      fSubmit.addEventListener('click', async () => {
-        const body = {
-          site_id: Number(fSite.value) || 0,
-          title: fTitle.value.trim(),
-          description: fDesc.value.trim(),
-          progress: fProg.value.trim() || '处理中',
-          status: fStatus.checked
-        };
-        if (!body.site_id) { toast('请选择站点', 'error'); return; }
-        if (!body.title) { toast('请填写标题', 'error'); return; }
-        try {
-          if (editId) await api('/api/admin/report/manual-faults/' + editId + '/update', { method: 'POST', body });
-          else await api('/api/admin/report/manual-faults/create', { method: 'POST', body });
-          toast(editId ? '已更新' : '已添加', 'success');
-          resetFaultForm();
-          loadFaults(1);
-        } catch (e) { toast(e.message, 'error'); }
-      });
 
       await loadSites();
       loadAvailability();
       loadBlocks();
-      loadFaults(1);
     })();
   })();
   </script>

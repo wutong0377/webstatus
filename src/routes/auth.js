@@ -36,6 +36,23 @@ setInterval(() => {
   }
 }, 60 * 1000).unref();
 
+/**
+ * 获取真实客户端 IP：反代后优先取 X-Forwarded-For 第一段，剥离 IPv6-mapped 前缀。
+ * 仅用于会话展示 / 最后登录 IP 记录，不参与登录锁定（锁定仍用 req.ip 防伪造绕过）。
+ */
+function getClientIp(req) {
+  let ip = '';
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) {
+    const first = String(xff).split(',')[0].trim();
+    if (first) ip = first;
+  }
+  if (!ip && req.ip) ip = req.ip;
+  if (ip.startsWith('::ffff:')) ip = ip.slice(7);
+  if (ip === '::1') ip = '127.0.0.1';
+  return ip.slice(0, 45);
+}
+
 function lockKey(username, ip) { return String(username || '').toLowerCase() + '|' + ip; }
 
 function isLocked(username, ip) {
@@ -65,7 +82,7 @@ async function establishSession(req, res, admin) {
   req.session.role = admin.role || 'admin';
   ensureToken(req, res);
   const ua = String(req.headers['user-agent'] || '').slice(0, 255);
-  const ip = req.ip || '';
+  const ip = getClientIp(req);
   await query(
     'INSERT INTO auth_sessions (admin_id, session_id, user_agent, ip) VALUES (?,?,?,?)',
     [admin.id, req.sessionID, ua, ip]
