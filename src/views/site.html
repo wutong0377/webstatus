@@ -4,8 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>站点详情 - WebStatus</title>
+  <meta name="description" content="WebStatus 网站状态监控 - 站点实时状态、延迟曲线与故障记录">
+  <meta name="keywords" content="WebStatus,网站状态监控,uptime,status">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -73,7 +75,7 @@
     <div id="ws-copyright"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.1.0"></script>
+  <script src="/assets/js/common.js?v=2.2.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
@@ -306,6 +308,15 @@
 
     function renderSite(site) {
       $('#page-title').textContent = (site && site.name) || t('site.title');
+      // SEO 动态注入
+      try {
+        document.title = (site.seo_title || site.name || '站点详情') + ' - WebStatus';
+        const md = document.querySelector('meta[name="description"]');
+        if (md && (site.seo_desc || site.description)) md.setAttribute('content', site.seo_desc || site.description);
+        const mk = document.querySelector('meta[name="keywords"]');
+        if (mk && site.seo_keywords) mk.setAttribute('content', site.seo_keywords);
+      } catch (e) { /* SEO 注入失败不影响渲染 */ }
+
       const info = $('#site-info');
       const meta = STATUS_META[site.status] || STATUS_META[0];
       info.innerHTML = '';

@@ -57,6 +57,8 @@ router.get('/status', async (req, res, next) => {
       data = await getSitesLatest();
       cache.set('pub_status', data, ttl);
     }
+    // CDN / 浏览器缓存头（配合 CF 边缘缓存）
+    res.setHeader('Cache-Control', 'public, max-age=' + ttl);
     // 当前生效的维护窗口（前台展示）
     const windows = await query(
       'SELECT mw.id, mw.site_id, mw.title, mw.start_at, mw.end_at, s.name AS site_name FROM maintenance_windows mw LEFT JOIN sites s ON mw.site_id = s.id WHERE mw.enabled = 1 AND mw.start_at <= NOW() AND mw.end_at >= NOW() ORDER BY mw.end_at ASC LIMIT 20'
@@ -134,6 +136,7 @@ router.get('/site/:id', async (req, res, next) => {
       };
       cache.set(cacheKey, data, ttl);
     }
+    res.setHeader('Cache-Control', 'public, max-age=' + ttl);
     res.json({ code: 0, data });
   } catch (e) { next(e); }
 });
@@ -156,6 +159,7 @@ router.get('/mini-timeline', async (req, res, next) => {
       }
       cache.set(cacheKey, data, ttl);
     }
+    res.setHeader('Cache-Control', 'public, max-age=' + ttl);
     res.json({ code: 0, data });
   } catch (e) { next(e); }
 });
@@ -172,6 +176,7 @@ router.get('/availability', async (req, res, next) => {
     for (const r of rows) {
       map[r.site_id] = Number(r.total) ? Math.round((Number(r.ok) / Number(r.total)) * 10000) / 100 : null;
     }
+    res.setHeader('Cache-Control', 'public, max-age=60');
     res.json({ code: 0, data: map });
   } catch (e) { next(e); }
 });
@@ -184,6 +189,7 @@ router.get('/notices', async (req, res, next) => {
       data = await query('SELECT id, title, content, is_pinned FROM notices ORDER BY is_pinned DESC, sort ASC, id DESC LIMIT 20');
       cache.set('pub_notices', data, 10000);
     }
+    res.setHeader('Cache-Control', 'public, max-age=10');
     res.json({ code: 0, data });
   } catch (e) { next(e); }
 });

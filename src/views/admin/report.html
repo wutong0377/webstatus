@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>报表中心 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
 </head>
 <body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js?v=2.1.0"></script>
+  <script src="/assets/js/common.js?v=2.2.0"></script>
   <script>
   (() => {
-    const { api, esc, h, toast } = WebStatus;
+    const { api, esc, h, toast, t } = WebStatus;
     const inp = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
 
     const BLOCK_BG = {
@@ -33,17 +33,17 @@
 
       /* ---------- 顶部：站点选择 + 导出 ---------- */
       const topBar = h('div', 'flex items-center justify-between flex-wrap gap-3');
-      topBar.appendChild(h('h1', 'text-xl font-bold', '报表'));
+      topBar.appendChild(h('h1', 'text-xl font-bold', t('report.title')));
       const controls = h('div', 'flex items-center gap-2 flex-wrap');
       const siteSelect = h('select', 'w-56 ' + inp);
       siteSelect.id = 'site-select';
-      siteSelect.innerHTML = '<option value="">请选择站点</option>';
+      siteSelect.innerHTML = '<option value="">' + t('report.chooseSite') + '</option>';
       controls.appendChild(siteSelect);
       const daysSelect = h('select', 'w-28 ' + inp);
       daysSelect.id = 'days-select';
-      daysSelect.innerHTML = '<option value="7">近 7 天</option><option value="30">近 30 天</option><option value="90">近 90 天</option>';
+      daysSelect.innerHTML = '<option value="7">' + t('report.days7') + '</option><option value="30">' + t('report.days30') + '</option><option value="90">' + t('report.days90') + '</option>';
       controls.appendChild(daysSelect);
-      const exportBtn = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '导出 CSV');
+      const exportBtn = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', t('report.export'));
       controls.appendChild(exportBtn);
       topBar.appendChild(controls);
       page.appendChild(topBar);
@@ -51,12 +51,12 @@
       /* ---------- 可用率表格 ---------- */
       const avBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl');
       page.appendChild(avBox);
-      avBox.appendChild(h('div', 'px-5 pt-4 pb-2 text-sm font-semibold', '每日可用率'));
+      avBox.appendChild(h('div', 'px-5 pt-4 pb-2 text-sm font-semibold', t('report.availability')));
       const avTableWrap = h('div', 'overflow-x-auto px-2 pb-2');
       avBox.appendChild(avTableWrap);
       const avTable = h('table', 'w-full text-sm');
       avTable.innerHTML = '<thead><tr class="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-slate-800">' +
-        '<th class="px-4 py-2.5 font-medium">日期</th><th class="px-4 py-2.5 font-medium">可用率</th></tr></thead>';
+        '<th class="px-4 py-2.5 font-medium">' + t('report.date') + '</th><th class="px-4 py-2.5 font-medium">' + t('report.availabilityRate') + '</th></tr></thead>';
       const avBody = h('tbody', '');
       avTable.appendChild(avBody);
       avTableWrap.appendChild(avTable);
@@ -64,7 +64,7 @@
       /* ---------- 状态方块图 ---------- */
       const blockBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
       page.appendChild(blockBox);
-      blockBox.appendChild(h('div', 'text-sm font-semibold mb-3', '近 7 天状态方块图（每小时）'));
+      blockBox.appendChild(h('div', 'text-sm font-semibold mb-3', t('report.blocks')));
       const blockGrid = h('div', '');
       blockGrid.id = 'block-grid';
       blockBox.appendChild(blockGrid);
@@ -75,7 +75,7 @@
           const r = await api('/api/admin/settings/site-options');
           sites = r.data || [];
           const opts = sites.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('');
-          siteSelect.innerHTML = '<option value="">请选择站点</option>' + opts;
+          siteSelect.innerHTML = '<option value="">' + t('report.chooseSite') + '</option>' + opts;
         } catch (e) { toast(e.message, 'error'); }
       }
 
@@ -85,7 +85,7 @@
         const siteId = currentSiteId();
         avBody.innerHTML = '';
         if (!siteId) {
-          avBody.appendChild(h('tr', '', '<td colspan="2" class="px-4 py-8 text-center text-slate-400">请先选择站点</td>'));
+          avBody.appendChild(h('tr', '', '<td colspan="2" class="px-4 py-8 text-center text-slate-400">' + t('report.selectFirst') + '</td>'));
           return;
         }
         try {
@@ -95,7 +95,7 @@
             tr.appendChild(h('td', 'px-4 py-2.5 text-xs text-slate-500 tabular', esc(row.date)));
             const cell = h('td', 'px-4 py-2.5');
             if (row.availability === null || row.availability === undefined) {
-              cell.appendChild(h('span', 'text-xs text-slate-400', '无数据'));
+              cell.appendChild(h('span', 'text-xs text-slate-400', t('report.noData')));
             } else {
               const a = row.availability;
               const color = a >= 99.9 ? 'bg-emerald-500' : a >= 95 ? 'bg-emerald-400' : a >= 90 ? 'bg-amber-400' : 'bg-red-500';
@@ -118,7 +118,7 @@
         const siteId = currentSiteId();
         blockGrid.innerHTML = '';
         if (!siteId) {
-          blockGrid.appendChild(h('div', 'text-sm text-slate-400', '请先选择站点'));
+          blockGrid.appendChild(h('div', 'text-sm text-slate-400', t('report.selectFirst')));
           return;
         }
         try {
@@ -126,9 +126,9 @@
           const data = r.data || [];
 
           const legend = h('div', 'flex items-center gap-3 text-xs text-slate-400 mb-3 flex-wrap');
-          legend.appendChild(h('span', '', '图例：'));
-          [['正常', 'bg-emerald-400'], ['卡顿', 'bg-amber-400'], ['离线', 'bg-red-500'], ['维修', 'bg-blue-500'], ['无数据', 'bg-slate-200 dark:bg-slate-700']].forEach(pair => {
-            legend.appendChild(h('span', 'flex items-center gap-1', '<span class="w-3 h-3 rounded-sm ' + pair[1] + '"></span>' + pair[0]));
+          legend.appendChild(h('span', '', t('report.legend')));
+          [[t('status.up'), 'bg-emerald-400'], [t('status.slow'), 'bg-amber-400'], [t('status.down'), 'bg-red-500'], [t('status.maintenance'), 'bg-blue-500'], [t('report.noData'), 'bg-slate-200 dark:bg-slate-700']].forEach(pair => {
+            legend.appendChild(h('span', 'flex items-center gap-1', '<span class="w-3 h-3 rounded-sm ' + pair[1] + '"></span>' + esc(pair[0])));
           });
           blockGrid.appendChild(legend);
 
@@ -161,7 +161,7 @@
       });
       exportBtn.addEventListener('click', () => {
         const siteId = currentSiteId();
-        if (!siteId) { toast('请先选择站点', 'error'); return; }
+        if (!siteId) { toast(t('report.selectFirst'), 'error'); return; }
         window.open('/api/admin/report/export?site_id=' + siteId + '&days=' + avDays, '_blank');
       });
 

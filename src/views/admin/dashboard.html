@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>仪表盘 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
 </head>
 <body>
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js?v=2.1.0"></script>
+  <script src="/assets/js/common.js?v=2.2.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
@@ -65,7 +65,8 @@
           item.appendChild(h('span', 'w-2 h-2 rounded-full flex-shrink-0 ' + meta.dot));
           const body = h('div', 'flex-1 min-w-0');
           body.appendChild(h('div', 'text-sm font-medium truncate', esc(f.site_name)));
-          body.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(f.error_code || (f.error_msg || ''))));
+          const sub = (f.explain && (f.explain.name + '：' + f.explain.cause)) || f.error_code || f.error_msg || '';
+          body.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(sub)));
           item.appendChild(body);
           item.appendChild(h('span', 'text-xs text-slate-400 tabular', esc(String(f.started_at || '').slice(5, 16))));
           faultBox.appendChild(item);

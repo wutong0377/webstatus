@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>网站状态监控 WebStatus</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -61,7 +61,7 @@
     <div id="ws-copyright" class="mt-2"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.1.0"></script>
+  <script src="/assets/js/common.js?v=2.2.0"></script>
   <script>
   (() => {
     const $ = s => document.querySelector(s);
@@ -341,7 +341,13 @@
     showSkeleton();
     load();
     loadNotices();
-    setInterval(() => { if (document.visibilityState !== 'hidden') { load(); loadNotices(); } }, Math.max(5, refreshSec) * 1000);
+    // 递归 setTimeout：刷新间隔随配置即时生效（比固定 setInterval 更准确）
+    (function poll() {
+      setTimeout(() => {
+        if (document.visibilityState !== 'hidden') { load(); loadNotices(); }
+        poll();
+      }, Math.max(5, refreshSec) * 1000);
+    })();
 
     // 版权渲染（校验失败会停止页面渲染）
     WebStatus.renderCopyright();

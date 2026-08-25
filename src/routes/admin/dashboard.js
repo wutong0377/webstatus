@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { query } = require('../../db');
+const { getErrorExplain } = require('../../data/errorCodes');
 const { getSitesLatest, getServiceStatus } = require('../../lib/monitor');
 
 router.get('/overview', async (req, res, next) => {
@@ -22,8 +23,13 @@ router.get('/overview', async (req, res, next) => {
     }
 
     const recentFaults = await query(
-      'SELECT f.id, f.site_id, f.fault_status, f.http_code, f.error_code, f.started_at, f.ended_at, f.duration_sec, s.name AS site_name FROM fault_logs f JOIN sites s ON f.site_id = s.id ORDER BY f.id DESC LIMIT 8'
+      'SELECT f.id, f.site_id, f.fault_status, f.http_code, f.error_code, f.error_msg, f.started_at, f.ended_at, f.duration_sec, s.name AS site_name FROM fault_logs f JOIN sites s ON f.site_id = s.id ORDER BY f.id DESC LIMIT 8'
     );
+    // 附上错误解读（原因/建议），后台"最近故障"直接展示
+    for (const f of recentFaults) {
+      const ex = getErrorExplain(f.error_code, f.error_msg);
+      f.explain = { name: ex.name, cause: ex.cause, level: ex.level };
+    }
     const recentMails = await query('SELECT id, to_email, mail_type, status, error_msg, created_at FROM mail_logs ORDER BY id DESC LIMIT 8');
     const service = getServiceStatus();
 
