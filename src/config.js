@@ -39,10 +39,11 @@ const DEFAULTS = {
     allow_insecure_tls: false // 仅当 SMTP 使用自签名证书时设为 true（默认严格校验）
   },
   onebot: {
-    enabled: false, // OneBot QQ 机器人（预留，需自行实现发送逻辑）
+    enabled: false, // OneBot QQ 机器人（正向 WS/HTTP 接口）
     api_url: '',
     token: '',
-    group: ''
+    group: '',
+    private_uid: '' // 私聊目标 QQ（可选，配置后同时私聊推送）
   },
   installed: false
 };

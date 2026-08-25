@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>站点详情 - WebStatus</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -29,6 +29,9 @@
   <main class="max-w-5xl mx-auto px-4 py-6 space-y-5">
     <!-- 站点信息 -->
     <div id="site-info" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5"></div>
+
+    <!-- 安全检测：SSL 证书 / 域名到期 -->
+    <div id="sec-info" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 hidden"></div>
 
     <!-- 图表 + 时间线 -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -70,7 +73,7 @@
     <div id="ws-copyright"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script src="/assets/js/common.js?v=2.1.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
@@ -124,6 +127,61 @@
       if (status === 2) return '#f59e0b';
       if (status === 3) return '#ef4444';
       return '#3b82f6';
+    }
+
+    /* ---------- 安全检测：SSL 证书 / 域名到期 ---------- */
+    function secStatusCls(status) {
+      if (Number(status) === 1) return 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400';
+      if (Number(status) === 2) return 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400';
+      return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400';
+    }
+    function secStatusText(status) {
+      if (Number(status) === 1) return '正常';
+      if (Number(status) === 2) return '预警';
+      return '异常';
+    }
+    function secLine(k, v) {
+      return h('div', 'flex justify-between gap-3 text-xs', '<span class="text-slate-400 flex-shrink-0">' + k + '</span><span class="text-slate-700 dark:text-slate-200 truncate">' + (v == null ? '-' : esc(String(v))) + '</span>');
+    }
+    function parseSan(s) {
+      if (Array.isArray(s)) return s;
+      if (typeof s === 'string' && s) { try { const a = JSON.parse(s); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+      return [];
+    }
+    function renderSec(cert, domain) {
+      const box = $('#sec-info');
+      if (!box) return;
+      box.innerHTML = '';
+      const hasCert = !!(cert && cert.checked_at);
+      const hasDom = !!(domain && domain.checked_at);
+      if (!hasCert && !hasDom) { box.classList.add('hidden'); return; }
+      box.classList.remove('hidden');
+      box.appendChild(h('h2', 'font-semibold text-sm mb-4', '安全检测'));
+      const grid = h('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+      if (hasCert) {
+        const c = h('div', 'text-sm space-y-1.5');
+        c.appendChild(h('div', 'flex items-center gap-2 flex-wrap',
+          '<span class="text-xs font-medium text-slate-400">SSL 证书</span><span class="px-2 py-0.5 rounded-full text-xs ring-1 ring-inset ' + secStatusCls(cert.status) + '">' + secStatusText(cert.status) + '</span>'));
+        c.appendChild(secLine('签发机构', cert.issuer));
+        c.appendChild(secLine('有效期至', cert.valid_to));
+        c.appendChild(secLine('剩余天数', (cert.days_left !== null && cert.days_left !== undefined) ? cert.days_left + ' 天' : '-'));
+        const san = parseSan(cert.san);
+        if (san.length) c.appendChild(secLine('SAN 域名', san.length + ' 个'));
+        c.appendChild(secLine('OCSP 吊销', cert.ocsp_status === 3 ? '已吊销' : (cert.ocsp_status === 2 ? '无法校验' : '未吊销')));
+        if (Number(cert.status) !== 1 && cert.error_code) c.appendChild(h('div', 'text-xs text-red-500 mt-1', esc(cert.error_code)));
+        grid.appendChild(c);
+      }
+      if (hasDom) {
+        const d = h('div', 'text-sm space-y-1.5');
+        d.appendChild(h('div', 'flex items-center gap-2 flex-wrap',
+          '<span class="text-xs font-medium text-slate-400">域名到期</span><span class="px-2 py-0.5 rounded-full text-xs ring-1 ring-inset ' + secStatusCls(domain.status) + '">' + secStatusText(domain.status) + '</span>'));
+        d.appendChild(secLine('到期日期', domain.expiry_date));
+        d.appendChild(secLine('剩余天数', (domain.days_left !== null && domain.days_left !== undefined) ? domain.days_left + ' 天' : '-'));
+        d.appendChild(secLine('注册商', domain.registrar));
+        if (Number(domain.status) !== 1 && domain.error_code) d.appendChild(h('div', 'text-xs text-red-500 mt-1', esc(domain.error_code)));
+        grid.appendChild(d);
+      }
+      box.appendChild(grid);
     }
 
     function renderChart(points) {
@@ -278,6 +336,15 @@
       const m3 = h('span', 'px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300', esc(t('home.metric.checked')) + ' ' + (site.last_checked_at ? esc(site.last_checked_at) : '-'));
       metrics.appendChild(m1); metrics.appendChild(m2); metrics.appendChild(m3);
       body.appendChild(metrics);
+      // 性能细分（DNS/TCP/TLS/TTFB）
+      const brk = h('div', 'mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs');
+      const brkItem = (label, val) => h('div', 'px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700',
+        '<div class="text-slate-400">' + esc(label) + '</div><div class="font-medium tabular text-slate-700 dark:text-slate-200">' + (val == null ? '-' : val) + '</div>');
+      brk.appendChild(brkItem('DNS 解析', fmtDelay(site.last_dns_ms)));
+      brk.appendChild(brkItem('TCP 握手', fmtDelay(site.last_tcp_ms)));
+      brk.appendChild(brkItem('TLS 握手', fmtDelay(site.last_tls_ms)));
+      brk.appendChild(brkItem('TTFB 首字节', fmtDelay(site.last_ttfb_ms)));
+      body.appendChild(brk);
       top.appendChild(body);
       info.appendChild(top);
     }
@@ -290,6 +357,7 @@
         try { renderChart(d.chart || []); } catch (e) { /* 图表失败不影响时间线/故障 */ }
         renderTimeline(d.changes || []);
         renderFaults(d.faults || []);
+        renderSec(d.cert || null, d.domain || null);
         $('#csv-link').href = '/api/public/site/' + id + '/export';
       } catch (e) {
         toast(e.message || t('common.loadFailed'), 'error');

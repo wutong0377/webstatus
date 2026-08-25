@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>告警设置 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
 </head>
 <body>
   <div id="admin-shell"></div>
@@ -93,7 +93,7 @@
     </div>
   </div>
 
-  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script src="/assets/js/common.js?v=2.1.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast } = WebStatus;
@@ -481,8 +481,8 @@
       const obPanel = panels.onebot;
       const obBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 max-w-lg');
       obPanel.appendChild(obBox);
-      obBox.appendChild(h('h2', 'text-sm font-semibold mb-4', 'OneBot QQ 机器人配置（预留通道）'));
-      obBox.appendChild(h('div', 'text-xs text-slate-400 mb-4', '通过 OneBot 协议对接 QQ 群告警推送。此处仅保存配置，发送逻辑由后端实现。'));
+      obBox.appendChild(h('h2', 'text-sm font-semibold mb-4', 'OneBot QQ 机器人配置'));
+      obBox.appendChild(h('div', 'text-xs text-slate-400 mb-4', '通过 OneBot v11 HTTP 接口对接 QQ 群/私聊告警推送。需先运行一个 OneBot 实现（如 go-cqhttp / NapCat），并开启 HTTP 上报/正向接口。'));
 
       const obForm = h('div', 'space-y-4');
       const obEnabledWrap = h('div', '');
@@ -517,9 +517,17 @@
       obGroupWrap.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', '目标群号'));
       const obGroup = h('input', inp);
       obGroup.id = 'ob-group';
-      obGroup.placeholder = '例如 123456789';
+      obGroup.placeholder = '例如 123456789（留空则不发群消息）';
       obGroupWrap.appendChild(obGroup);
       obForm.appendChild(obGroupWrap);
+
+      const obPrivateWrap = h('div', '');
+      obPrivateWrap.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', '私聊目标 QQ（可选）'));
+      const obPrivate = h('input', inp);
+      obPrivate.id = 'ob-private';
+      obPrivate.placeholder = '例如 10001（留空则不私聊）';
+      obPrivateWrap.appendChild(obPrivate);
+      obForm.appendChild(obPrivateWrap);
 
       const obErr = h('div', 'hidden text-sm text-red-600 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2');
       obForm.appendChild(obErr);
@@ -536,6 +544,7 @@
           obToken.value = '';
           obToken.placeholder = d.token_masked ? '已保存（输入新值可修改）' : '未设置';
           obGroup.value = d.group || '';
+          obPrivate.value = d.private_uid || '';
         } catch (e) { toast(e.message, 'error'); }
       }
 
@@ -547,7 +556,8 @@
               enabled: obEnabled.checked,
               api_url: obUrl.value.trim(),
               token: obToken.value,
-              group: obGroup.value.trim()
+              group: obGroup.value.trim(),
+              private_uid: obPrivate.value.trim()
             }
           });
           toast('配置已保存', 'success');

@@ -4,11 +4,12 @@
  * DNS 记录监控、SSL 证书检测、HTTP 安全头巡检。
  * 这些检测与主 HTTP 巡检解耦，由巡检任务按站点配置（check_dns/check_cert/check_tcp）调用。
  */
+const net = require('net');
 const dns = require('dns').promises;
 const tls = require('tls');
 const http = require('http');
-const https = require('https');
 const { query } = require('../db');
+const { parseProbeUrl } = require('../utils/net');
 const { formatDateTime } = require('../utils/time');
 
 // OCSP 吊销检测依赖 ocsp 库（可选）；未安装时自动降级为"无法校验"，不崩溃
@@ -124,23 +125,47 @@ async function getLatestCert(siteId) {
 }
 
 /**
- * HTTP 安全头巡检
+ * HTTP 安全头巡检（SSRF 安全版）
+ * 先经 parseProbeUrl 做 SSRF 校验并钉死已解析 IP，再发起请求，防 DNS 重绑定。
  * @param {string} url 站点 URL
  * @returns Promise<{ok, headers:object, findings:Array<{header, present}>}>
  */
 function checkSecurityHeaders(url, timeoutMs = 10000) {
   const HEADERS = ['strict-transport-security', 'content-security-policy', 'x-frame-options', 'x-content-type-options', 'referrer-policy'];
   return new Promise((resolve) => {
-    const isHttps = String(url).startsWith('https:');
-    const mod = isHttps ? https : http;
-    const req = mod.get(url, { timeout: timeoutMs, headers: { 'User-Agent': UA, 'Accept': '*/*' } }, (res) => {
-      const headers = res.headers || {};
-      const findings = HEADERS.map(h => ({ header: h, present: headers[h] !== undefined }));
-      res.resume();
-      res.on('end', () => resolve({ ok: true, headers, findings }));
+    parseProbeUrl(url).then(info => {
+      const isHttps = info.url.startsWith('https:');
+      const sock = net.connect({ host: info.ip, port: info.port });
+      const finish = (out) => { try { sock.destroy(); } catch (_) {} resolve(out); };
+      sock.once('connect', () => {
+        const doRequest = (socket) => {
+          const req = http.request({
+            createConnection: () => socket,
+            host: info.host,
+            path: info.path,
+            method: 'GET',
+            headers: { Host: info.host, 'User-Agent': UA, 'Accept': '*/*', 'Connection': 'close' }
+          }, (res) => {
+            const headers = res.headers || {};
+            const findings = HEADERS.map(h => ({ header: h, present: headers[h] !== undefined }));
+            res.resume();
+            res.on('end', () => finish({ ok: true, headers, findings }));
+          });
+          req.on('error', (e) => finish({ ok: false, headers: {}, findings: [], errorCode: e.code || 'PROBE_ERROR', errorMsg: e.message }));
+          req.setTimeout(timeoutMs, () => { req.destroy(); finish({ ok: false, headers: {}, findings: [], errorCode: 'TIMEOUT', errorMsg: '超时' }); });
+          req.end();
+        };
+        if (isHttps) {
+          const ts = tls.connect({ socket: sock, servername: info.host }, () => doRequest(ts));
+          ts.on('error', (e) => finish({ ok: false, headers: {}, findings: [], errorCode: e.code || 'TLS_ERROR', errorMsg: e.message }));
+        } else {
+          doRequest(sock);
+        }
+      });
+      sock.on('error', (e) => finish({ ok: false, headers: {}, findings: [], errorCode: e.code || 'PROBE_ERROR', errorMsg: e.message }));
+    }).catch(e => {
+      resolve({ ok: false, headers: {}, findings: [], errorCode: e.code || 'PROBE_ERROR', errorMsg: e.message });
     });
-    req.on('error', (e) => resolve({ ok: false, headers: {}, findings: [], errorCode: e.code || 'PROBE_ERROR', errorMsg: e.message }));
-    req.setTimeout(timeoutMs, () => { req.destroy(); resolve({ ok: false, headers: {}, findings: [], errorCode: 'TIMEOUT', errorMsg: '超时' }); });
   });
 }
 

@@ -257,6 +257,7 @@ router.post('/api/upload-backup', (req, res) => {
 /* ------------------- 3B-2. 模式 B：执行导入恢复 ------------------- */
 router.post('/api/restore-db', async (req, res) => {
   const confirm = req.body && req.body.confirmRisk;
+  const force = !!(req.body && req.body.force);
   if (!(confirm === true || confirm === '1' || confirm === 'true')) {
     return res.status(400).json({ code: 400, message: '请先勾选风险确认：导入将覆盖目标数据库全部现有数据' });
   }
@@ -268,8 +269,12 @@ router.post('/api/restore-db', async (req, res) => {
   try {
     conn = await connectForInstall(req.body);
     const sqlText = fs.readFileSync(filePath, 'utf8');
-    if (!sqlText.slice(0, 600).includes('WebStatus Database Backup')) {
+    // 头部特征校验：仅接受本系统导出的备份；勾选「强制导入（兼容旧库）」可跳过（管理员自担风险）
+    if (!force && !sqlText.slice(0, 600).includes('WebStatus Database Backup')) {
       return res.status(400).json({ code: 400, message: '文件头部校验失败：这不是本系统导出的备份文件，已拒绝导入' });
+    }
+    if (force && !sqlText.slice(0, 600).includes('WebStatus Database Backup')) {
+      console.warn('[install] 用户选择强制导入非本系统备份，已放行（管理员自担风险）');
     }
     // 清空目标库现有表 + 分块导入
     await restoreFromConn(conn, sqlText);

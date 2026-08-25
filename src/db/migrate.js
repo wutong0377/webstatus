@@ -188,6 +188,39 @@ const MIGRATIONS = [
         KEY idx_domain_time (checked_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='域名注册到期检测'`);
     }
+  },
+  {
+    version: 4,
+    name: 'v2.0 性能细分：status_history 增加 DNS/TCP/TLS/TTFB 分段耗时',
+    up: async (conn) => {
+      await addColumnIfMissing(conn, 'status_history', 'dns_ms', 'INT NOT NULL DEFAULT 0 COMMENT \'DNS解析耗时(ms)\'');
+      await addColumnIfMissing(conn, 'status_history', 'tcp_ms', 'INT NOT NULL DEFAULT 0 COMMENT \'TCP握手耗时(ms)\'');
+      await addColumnIfMissing(conn, 'status_history', 'tls_ms', 'INT NOT NULL DEFAULT 0 COMMENT \'TLS握手耗时(ms)\'');
+      await addColumnIfMissing(conn, 'status_history', 'ttfb_ms', 'INT NOT NULL DEFAULT 0 COMMENT \'TTFB首字节耗时(ms)\'');
+    }
+  },
+  {
+    version: 5,
+    name: 'v2.0 增强检测展示：cert_checks 增加 OCSP 吊销状态',
+    up: async (conn) => {
+      await addColumnIfMissing(conn, 'cert_checks', 'ocsp_status', "TINYINT NOT NULL DEFAULT 1 COMMENT 'OCSP吊销状态 1未吊销 2无法校验 3已吊销'");
+    }
+  },
+  {
+    version: 6,
+    name: 'v2.0 HTTP 安全头巡检：sites.check_headers 开关 + security_checks 表',
+    up: async (conn) => {
+      await addColumnIfMissing(conn, 'sites', 'check_headers', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否HTTP安全头巡检'");
+      await createTableIfMissing(conn, 'security_checks', `CREATE TABLE IF NOT EXISTS security_checks (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        site_id INT UNSIGNED NOT NULL,
+        ok TINYINT(1) NOT NULL DEFAULT 1,
+        findings TEXT,
+        error_code VARCHAR(50) NOT NULL DEFAULT '',
+        checked_at DATETIME NOT NULL,
+        KEY idx_sec_site (site_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='HTTP安全头巡检'`);
+    }
   }
 ];
 

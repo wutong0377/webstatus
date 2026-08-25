@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>故障日志 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
 </head>
 <body>
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script src="/assets/js/common.js?v=2.1.0"></script>
   <script>
   (() => {
     const { api, esc, h, toast, t } = WebStatus;
@@ -25,7 +25,7 @@
       const fSite = h('select', sel);
       const allSite = h('option', '', t('faultLogs.allSites')); allSite.value = ''; fSite.appendChild(allSite);
       const fStatus = h('select', sel);
-      [['', t('faultLogs.allStatus')], ['3', t('status.down')], ['2', t('status.slow')]].forEach(o => {
+      [['', t('faultLogs.allStatus')], ['1', t('status.up')], ['2', t('status.slow')], ['3', t('status.down')], ['4', t('status.maintenance')]].forEach(o => {
         const op = h('option', '', o[1]); op.value = o[0]; fStatus.appendChild(op);
       });
       const fCode = h('input', inp);

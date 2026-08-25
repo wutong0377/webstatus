@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>站点管理 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
 </head>
 <body>
   <div id="admin-shell"></div>
@@ -70,6 +70,58 @@
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.maintenanceNote">维修备注</label>
             <input id="f-maint-note" class="inp" maxlength="500" placeholder="填写维修说明，前台将显示蓝色维修状态">
           </div>
+
+          <!-- 增强检测（v2） -->
+          <div class="mt-4 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
+            <div class="text-xs font-semibold text-slate-500">增强检测</div>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" id="f-check-dns" class="w-4 h-4 accent-blue-600"><span>DNS 记录监控</span>
+              </label>
+              <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" id="f-check-cert" class="w-4 h-4 accent-blue-600"><span>SSL 证书检测</span>
+              </label>
+              <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" id="f-check-tcp" class="w-4 h-4 accent-blue-600"><span>TCP 端口检测</span>
+              </label>
+              <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" id="f-check-domain" class="w-4 h-4 accent-blue-600"><span>域名到期检测</span>
+              </label>
+              <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" id="f-check-ocsp" class="w-4 h-4 accent-blue-600"><span>OCSP 吊销检测</span>
+              </label>
+              <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                <input type="checkbox" id="f-check-headers" class="w-4 h-4 accent-blue-600"><span>HTTP 安全头巡检</span>
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">监控模式</label>
+                <select id="f-monitor-mode" class="inp">
+                  <option value="http">HTTP(S)</option>
+                  <option value="tcp">TCP 端口</option>
+                  <option value="icmp">ICMP Ping</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">期望状态码（留空=2xx 视为正常）</label>
+                <input id="f-expected-status" type="number" class="inp" min="100" max="599" placeholder="如 200">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">TCP 检测端口</label>
+                <input id="f-tcp-port" type="number" class="inp" min="1" max="65535">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">证书预警天数</label>
+                <input id="f-cert-warn" type="number" class="inp" min="1" max="365" value="30">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">域名预警天数</label>
+                <input id="f-domain-warn" type="number" class="inp" min="7" max="365" value="90">
+              </div>
+            </div>
+          </div>
+
           <div id="form-err" class="hidden text-sm text-red-600 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2"></div>
           <div class="flex justify-end gap-3 pt-2">
             <button type="button" data-close class="px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium" data-i18n="common.cancel">取消</button>
@@ -80,7 +132,7 @@
     </div>
   </div>
 
-  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script src="/assets/js/common.js?v=2.1.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, t, tStatus, skeleton } = WebStatus;
@@ -108,6 +160,19 @@
       box.appendChild(listWrap);
       list = h('div', 'space-y-2.5');
       listWrap.appendChild(list);
+
+      // 证书/域名检测状态小徽章（v2）
+      function secBadge(label, status) {
+        const st = Number(status);
+        let txt = label;
+        if (st === 2) txt += '·预警';
+        else if (st === 3) txt += '·异常';
+        else if (st === 1) txt += '·正常';
+        const cls = st === 1 ? 'bg-emerald-50 text-emerald-600 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400'
+          : st === 2 ? 'bg-amber-50 text-amber-600 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400'
+          : 'bg-red-50 text-red-600 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400';
+        return h('span', 'px-1.5 py-0.5 rounded text-[10px] ring-1 ring-inset ' + cls, esc(txt));
+      }
 
       function renderList() {
         document.getElementById('count-badge').textContent = sites.length + ' / ' + maxSites;
@@ -138,6 +203,8 @@
           nameRow.appendChild(h('span', 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset ' + meta.badge,
             icon(meta.icon, 'w-3 h-3') + '<span>' + esc(tStatus(s.status)) + '</span>'));
           if (s.enabled !== 1) nameRow.appendChild(h('span', 'text-xs text-slate-400', t('sites.disabled')));
+          if (Number(s.check_cert) === 1) nameRow.appendChild(secBadge('证书', s.cert_status));
+          if (Number(s.check_domain) === 1) nameRow.appendChild(secBadge('域名', s.domain_status));
           body.appendChild(nameRow);
           body.appendChild(h('div', 'text-xs text-slate-400 truncate', esc(s.domain)));
           if (s.maintenance === 1 && s.maintenance_note) {
@@ -196,6 +263,18 @@
         document.getElementById('f-enabled').checked = s.enabled !== 0;
         document.getElementById('f-maintenance').checked = s.maintenance === 1;
         document.getElementById('f-maint-note').value = s.maintenance_note || '';
+        // 增强检测
+        document.getElementById('f-check-dns').checked = Number(s.check_dns) === 1;
+        document.getElementById('f-check-cert').checked = Number(s.check_cert) === 1;
+        document.getElementById('f-check-tcp').checked = Number(s.check_tcp) === 1;
+        document.getElementById('f-check-domain').checked = Number(s.check_domain) === 1;
+        document.getElementById('f-check-ocsp').checked = Number(s.check_ocsp) === 1;
+        document.getElementById('f-check-headers').checked = Number(s.check_headers) === 1;
+        document.getElementById('f-monitor-mode').value = s.monitor_mode || 'http';
+        document.getElementById('f-expected-status').value = s.expected_status || '';
+        document.getElementById('f-tcp-port').value = s.tcp_port || '';
+        document.getElementById('f-cert-warn').value = s.cert_warn_days || 30;
+        document.getElementById('f-domain-warn').value = s.domain_warn_days || 90;
       }
 
       function openAdd() {
@@ -226,7 +305,18 @@
           seo_keywords: document.getElementById('f-seo-kw').value.trim(),
           enabled: document.getElementById('f-enabled').checked,
           maintenance: document.getElementById('f-maintenance').checked,
-          maintenance_note: document.getElementById('f-maint-note').value.trim()
+          maintenance_note: document.getElementById('f-maint-note').value.trim(),
+          check_dns: document.getElementById('f-check-dns').checked,
+          check_cert: document.getElementById('f-check-cert').checked,
+          check_tcp: document.getElementById('f-check-tcp').checked,
+          check_domain: document.getElementById('f-check-domain').checked,
+          check_ocsp: document.getElementById('f-check-ocsp').checked,
+          check_headers: document.getElementById('f-check-headers').checked,
+          monitor_mode: document.getElementById('f-monitor-mode').value,
+          expected_status: document.getElementById('f-expected-status').value ? Number(document.getElementById('f-expected-status').value) : null,
+          tcp_port: document.getElementById('f-tcp-port').value ? Number(document.getElementById('f-tcp-port').value) : null,
+          cert_warn_days: Number(document.getElementById('f-cert-warn').value) || 30,
+          domain_warn_days: Number(document.getElementById('f-domain-warn').value) || 90
         };
         const err = document.getElementById('form-err');
         try {

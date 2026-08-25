@@ -65,19 +65,50 @@ async function sendWebhooks(siteId, title, content) {
   }
 }
 
+/** 将 HTML 转为纯文本（OneBot 消息用） */
+function stripHtml(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim();
+}
+
 /**
- * OneBot QQ 机器人（预留通道）
- * 需求明确：仅预留配置（api_url/token/group）与空调用函数，不实现完整发送逻辑。
- * 如需启用，请在此实现 OneBot 协议 API 调用（如 send_group_msg）。
+ * OneBot QQ 机器人通道（v11 HTTP 接口）
+ * 调用 OneBot 正向 HTTP 的 send_group_msg / send_private_msg 接口，
+ * 群与私聊可同时启用，开关可控（config.onebot.enabled）。
+ * 支持 Authorization: Bearer <token> 鉴权。
  */
-async function sendOneBotReserved(siteId, title, content) {
+async function sendOneBot(siteId, title, content) {
   const ob = config.onebot || {};
-  if (ob.enabled !== true) return;
-  // TODO(预留): 调用 OneBot API 推送告警到群/私聊
-  // 示例: await fetch(ob.api_url + '/send_group_msg', { ... })
-  try {
-    await logAlert(siteId, 'qq', 2, 'qq', 'QQ机器人', 1, '', '预留通道（未实现完整发送）');
-  } catch (e) { /* ignore */ }
+  if (ob.enabled !== true || !ob.api_url) return;
+  const message = stripHtml(title) + '\n' + stripHtml(content);
+  if (!message.trim()) return;
+  const base = String(ob.api_url).trim().replace(/\/+$/, '');
+  const headers = { 'Content-Type': 'application/json' };
+  if (ob.token) headers['Authorization'] = 'Bearer ' + ob.token;
+  const targets = [];
+  if (ob.group) targets.push({ type: 'send_group_msg', body: { group_id: String(ob.group), message } });
+  if (ob.private_uid) targets.push({ type: 'send_private_msg', body: { user_id: String(ob.private_uid), message } });
+  let sent = 0;
+  for (const t of targets) {
+    try {
+      await fetch(base + '/' + t.type, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(t.body),
+        signal: AbortSignal.timeout(8000)
+      });
+      sent++;
+    } catch (e) {
+      await logAlert(siteId, 'qq', 2, 'qq', 'QQ机器人', 0, (e && e.message) || 'OneBot 发送失败', '');
+    }
+  }
+  if (sent > 0) {
+    await logAlert(siteId, 'qq', 2, 'qq', 'QQ机器人', 1, '', '');
+  }
 }
 
 /**
@@ -111,8 +142,8 @@ async function sendAlert(opts) {
   // Webhook
   try { await sendWebhooks(sid, title, content); } catch (e) { /* ignore */ }
 
-  // OneBot QQ（预留）
-  try { await sendOneBotReserved(sid, title, content); } catch (e) { /* ignore */ }
+  // OneBot QQ 机器人
+  try { await sendOneBot(sid, title, content); } catch (e) { /* ignore */ }
 
   return { sent: true, skipped: false };
 }
@@ -126,4 +157,4 @@ function cleanupCooldowns() {
 }
 setInterval(cleanupCooldowns, 60 * 60 * 1000).unref();
 
-module.exports = { sendAlert, inMaintenanceWindow };
+module.exports = { sendAlert, inMaintenanceWindow, sendOneBot };

@@ -123,6 +123,7 @@ router.get('/onebot', (req, res) => {
       enabled: ob.enabled === true,
       api_url: ob.api_url || '',
       group: ob.group || '',
+      private_uid: ob.private_uid || '',
       token_masked: ob.token ? '******' : ''
     }
   });
@@ -137,7 +138,8 @@ router.post('/onebot', (req, res, next) => {
         enabled: bool(b.enabled),
         api_url: str(b.api_url, 500, 'API 地址'),
         token: (b.token && String(b.token) !== '') ? String(b.token) : cur.token,
-        group: str(b.group, 100, '目标群号')
+        group: str(b.group, 100, '目标群号'),
+        private_uid: str(b.private_uid, 100, '私聊目标 QQ')
       }
     });
     res.json({ code: 0, message: 'OneBot 配置已保存（预留通道）' });

@@ -57,7 +57,11 @@ router.get('/status', async (req, res, next) => {
       data = await getSitesLatest();
       cache.set('pub_status', data, ttl);
     }
-    res.json({ code: 0, data, refresh: Number(settings.frontend_refresh) || 30 });
+    // 当前生效的维护窗口（前台展示）
+    const windows = await query(
+      'SELECT mw.id, mw.site_id, mw.title, mw.start_at, mw.end_at, s.name AS site_name FROM maintenance_windows mw LEFT JOIN sites s ON mw.site_id = s.id WHERE mw.enabled = 1 AND mw.start_at <= NOW() AND mw.end_at >= NOW() ORDER BY mw.end_at ASC LIMIT 20'
+    ).catch(() => []);
+    res.json({ code: 0, data, refresh: Number(settings.frontend_refresh) || 30, windows });
   } catch (e) { next(e); }
 });
 
@@ -70,7 +74,7 @@ router.get('/site/:id', async (req, res, next) => {
 
     // 附带最新一次探测结果（last_*），供详情页顶部指标展示
     const last = await queryOne(
-      'SELECT status, delay, http_code, error_code, error_msg, checked_at FROM status_history WHERE site_id = ? ORDER BY id DESC LIMIT 1',
+      'SELECT status, delay, http_code, error_code, error_msg, checked_at, dns_ms, tcp_ms, tls_ms, ttfb_ms FROM status_history WHERE site_id = ? ORDER BY id DESC LIMIT 1',
       [id]
     );
     if (last) {
@@ -80,6 +84,10 @@ router.get('/site/:id', async (req, res, next) => {
       site.last_error_code = last.error_code;
       site.last_error_msg = last.error_msg;
       site.last_checked_at = last.checked_at;
+      site.last_dns_ms = last.dns_ms;
+      site.last_tcp_ms = last.tcp_ms;
+      site.last_tls_ms = last.tls_ms;
+      site.last_ttfb_ms = last.ttfb_ms;
     } else {
       site.last_status = null;
       site.last_delay = null;
@@ -87,9 +95,19 @@ router.get('/site/:id', async (req, res, next) => {
       site.last_error_code = null;
       site.last_error_msg = null;
       site.last_checked_at = null;
+      site.last_dns_ms = null;
+      site.last_tcp_ms = null;
+      site.last_tls_ms = null;
+      site.last_ttfb_ms = null;
     }
     // 统一 status：维修模式强制 4，否则取最新探测状态
     site.status = site.maintenance === 1 ? 4 : (site.last_status || null);
+
+    // 最新 SSL 证书 / 域名到期检测结果（v2 展示）
+    const [cert, domain] = await Promise.all([
+      queryOne('SELECT status, issuer, subject, san, valid_from, valid_to, days_left, error_code, checked_at, ocsp_status FROM cert_checks WHERE site_id = ? ORDER BY id DESC LIMIT 1', [id]).catch(() => null),
+      queryOne('SELECT status, domain, expiry_date, days_left, registrar, error_code, checked_at FROM domain_checks WHERE site_id = ? ORDER BY id DESC LIMIT 1', [id]).catch(() => null)
+    ]);
 
     const range = ['hour', 'day', 'week', 'month'].includes(req.query.range) ? req.query.range : 'day';
     const settings = await settingsSvc.getAll();
@@ -110,7 +128,9 @@ router.get('/site/:id', async (req, res, next) => {
         faults: faultRows.map(f => ({
           ...f,
           status_text: STATUS_TEXT[f.fault_status] || '异常'
-        }))
+        })),
+        cert,
+        domain
       };
       cache.set(cacheKey, data, ttl);
     }
@@ -130,12 +150,29 @@ router.get('/mini-timeline', async (req, res, next) => {
       const ttl = Math.max(1, Number(settings.cache_ttl) || 5) * 1000;
       data = {};
       for (const sid of ids) {
-        const rows = await query('SELECT status, checked_at FROM status_history WHERE site_id = ? ORDER BY id DESC LIMIT 12', [sid]);
+        // 96 个历史点，供前台卡片渲染状态方块条
+        const rows = await query('SELECT status, checked_at FROM status_history WHERE site_id = ? ORDER BY id DESC LIMIT 96', [sid]);
         data[sid] = rows.reverse();
       }
       cache.set(cacheKey, data, ttl);
     }
     res.json({ code: 0, data });
+  } catch (e) { next(e); }
+});
+
+/* ---------------- 近 7 天可用率（全部站点，供前台展示） ---------------- */
+router.get('/availability', async (req, res, next) => {
+  try {
+    const { from } = rangeBound('week');
+    const rows = await query(
+      'SELECT site_id, SUM(status = 1) AS ok, COUNT(*) AS total FROM status_history WHERE checked_at >= ? GROUP BY site_id',
+      [from]
+    );
+    const map = {};
+    for (const r of rows) {
+      map[r.site_id] = Number(r.total) ? Math.round((Number(r.ok) / Number(r.total)) * 10000) / 100 : null;
+    }
+    res.json({ code: 0, data: map });
   } catch (e) { next(e); }
 });
 

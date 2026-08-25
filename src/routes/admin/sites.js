@@ -38,7 +38,8 @@ function parseSiteFields(body) {
     monitorMode: ['http', 'tcp', 'icmp'].includes(body.monitor_mode) ? body.monitor_mode : 'http',
     checkDomain: bool(body.check_domain),
     domainWarnDays: int(body.domain_warn_days, { min: 7, max: 365, def: 90, name: '域名预警天数' }),
-    checkOcsp: bool(body.check_ocsp)
+    checkOcsp: bool(body.check_ocsp),
+    checkHeaders: bool(body.check_headers)
   };
 }
 
@@ -47,7 +48,7 @@ const SITE_COLS = [
   'name', 'domain', 'description', 'seo_title', 'seo_desc', 'seo_keywords',
   'icon_url', 'enabled', 'maintenance', 'maintenance_note', 'sort',
   'alert_enabled', 'expected_status', 'check_dns', 'check_cert', 'cert_warn_days',
-  'check_tcp', 'tcp_port', 'monitor_mode', 'check_domain', 'domain_warn_days', 'check_ocsp'
+  'check_tcp', 'tcp_port', 'monitor_mode', 'check_domain', 'domain_warn_days', 'check_ocsp', 'check_headers'
 ];
 /** 与 SITE_COLS 顺序一致的值数组 */
 function siteValues(f) {
@@ -55,7 +56,7 @@ function siteValues(f) {
     f.name, f.domain, f.description, f.seoTitle, f.seoDesc, f.seoKeywords,
     f.iconUrl, f.enabled ? 1 : 0, f.maintenance ? 1 : 0, f.maintenanceNote, f.sort,
     f.alertEnabled ? 1 : 0, f.expectedStatus, f.checkDns ? 1 : 0, f.checkCert ? 1 : 0, f.certWarnDays,
-    f.checkTcp ? 1 : 0, f.tcpPort, f.monitorMode, f.checkDomain ? 1 : 0, f.domainWarnDays, f.checkOcsp ? 1 : 0
+    f.checkTcp ? 1 : 0, f.tcpPort, f.monitorMode, f.checkDomain ? 1 : 0, f.domainWarnDays, f.checkOcsp ? 1 : 0, f.checkHeaders ? 1 : 0
   ];
 }
 
@@ -84,6 +85,18 @@ router.get('/:id(\\d+)', async (req, res, next) => {
     const last = await queryOne('SELECT * FROM status_history WHERE site_id = ? ORDER BY id DESC LIMIT 1', [id]);
     const faultCount = await queryOne('SELECT COUNT(*) AS c FROM fault_logs WHERE site_id = ?', [id]);
     res.json({ code: 0, data: { site, stats, last, faultCount: Number(faultCount.c) } });
+  } catch (e) { next(e); }
+});
+
+/* ---------------- 站点证书/域名检测结果（v2） ---------------- */
+router.get('/:id(\\d+)/checks', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const [cert, domain] = await Promise.all([
+      queryOne('SELECT * FROM cert_checks WHERE site_id = ? ORDER BY id DESC LIMIT 1', [id]).catch(() => null),
+      queryOne('SELECT * FROM domain_checks WHERE site_id = ? ORDER BY id DESC LIMIT 1', [id]).catch(() => null)
+    ]);
+    res.json({ code: 0, data: { cert, domain } });
   } catch (e) { next(e); }
 });
 

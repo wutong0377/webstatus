@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>安装向导 - WebStatus 网站状态监控</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
 </head>
 <body class="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -45,7 +45,7 @@
     <div id="ws-copyright" class="mt-4"></div>
   </div>
 
-  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script src="/assets/js/common.js?v=2.1.0"></script>
   <script>
   (() => {
     // 防御性解构：兼容浏览器缓存的旧版 common.js（早期版本未导出 t/i18n 等函数），
@@ -254,11 +254,29 @@
       risk.appendChild(riskText);
       panel.appendChild(risk);
 
+      // 强制导入（兼容旧库/非本系统备份，管理员自担风险）
+      const forceLabel = h('label', 'mt-3 flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 cursor-pointer hidden');
+      forceLabel.id = 'force-box';
+      const forceCb = h('input', 'mt-0.5');
+      forceCb.type = 'checkbox';
+      forceCb.id = 'force-import';
+      forceCb.className = 'accent-amber-600';
+      forceLabel.appendChild(forceCb);
+      forceLabel.appendChild(h('div', 'text-xs text-amber-700 dark:text-amber-400',
+        '我已知晓：该文件未能识别为本系统备份（可能是旧版/第三方导出的 SQL）。勾选后允许强制导入，若文件格式异常将导致导入失败，请自担风险。'));
+      panel.appendChild(forceLabel);
+
       const btn = h('button', 'mt-5 ' + btnPrimary + ' hidden');
       btn.id = 'restore-btn';
       btn.textContent = '开始导入恢复';
       btn.addEventListener('click', () => doRestore(btn));
       panel.appendChild(btn);
+
+      function syncRestoreBtn() {
+        btn.disabled = !(rIsSystemBackup || forceCb.checked);
+      }
+      let rIsSystemBackup = false;
+      forceCb.addEventListener('change', syncRestoreBtn);
 
       fileInput.addEventListener('change', async () => {
         const f = fileInput.files[0];
@@ -272,12 +290,15 @@
         try {
           const r = await api('/install/api/upload-backup', { method: 'POST', body: fd });
           uploaded = true;
+          rIsSystemBackup = !!r.isSystemBackup;
           info.classList.remove('text-slate-500');
           info.classList.add('text-emerald-600');
-          info.textContent = '已上传：' + r.originalName + '（' + fmtBytes(r.size) + '）' + (r.isSystemBackup ? ' · 校验通过' : ' · 警告：未能识别为本系统备份，导入将被拒绝');
+          info.textContent = '已上传：' + r.originalName + '（' + fmtBytes(r.size) + '）' + (r.isSystemBackup ? ' · 校验通过' : ' · 警告：未能识别为本系统备份');
           risk.classList.remove('hidden');
           btn.classList.remove('hidden');
-          if (!r.isSystemBackup) { btn.disabled = true; }
+          forceLabel.classList.toggle('hidden', r.isSystemBackup);
+          forceCb.checked = false;
+          syncRestoreBtn();
         } catch (e) {
           info.classList.remove('text-slate-500');
           info.classList.add('text-red-600');
@@ -301,7 +322,7 @@
     async function doRestore(btn) {
       btn.disabled = true; btn.textContent = '导入中，请稍候...';
       try {
-        await api('/install/api/restore-db', { method: 'POST', body: { ...dbInfo, confirmRisk: true } });
+        await api('/install/api/restore-db', { method: 'POST', body: { ...dbInfo, confirmRisk: true, force: forceCb.checked } });
         toast('备份恢复成功，历史数据已导入', 'success');
         go(7);
       } catch (e) {

@@ -36,85 +36,136 @@ function classify(err) {
 }
 
 /**
- * HTTP(S) 探测（含分段计时）
+ * 单次 HTTP 请求（TCP+TLS+HTTP 分段计时），供 httpProbe 的每一跳调用
+ * @param {object} info parseProbeUrl 输出（已过 SSRF 校验，IP 已钉死）
+ * @param {number} timeoutMs 超时
+ * @returns Promise<{ok, httpCode, delay, errorCode, errorMsg, ip, dnsMs, tcpMs, tlsMs, ttfbMs, location, redirects}>
+ */
+function httpProbeOnce(info, timeoutMs, prev) {
+  return new Promise((resolve) => {
+    const out = { ...prev, dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, location: '', ok: false, httpCode: 0, errorCode: '', errorMsg: '' };
+    const isHttps = info.url.startsWith('https:');
+    let raw;
+    let settled = false;
+    const finish = (obj) => {
+      if (!settled) {
+        settled = true;
+        if (raw) { try { raw.destroy(); } catch (_) {} }
+        resolve(obj);
+      }
+    };
+
+    // 1) TCP 连接（用已解析 IP，防二次解析）
+    const t0 = Date.now();
+    connectTcp(info.ip, info.port, timeoutMs).then(sock => {
+      raw = sock;
+      out.tcpMs = Date.now() - t0;
+      // 2) TLS 握手（HTTPS）
+      if (isHttps) {
+        const t1 = Date.now();
+        return upgradeTls(raw, info.host, timeoutMs).then(ts => {
+          raw = ts;
+          out.tlsMs = Date.now() - t1;
+          return sendHttp(ts);
+        });
+      }
+      return sendHttp(sock);
+    }).catch(e => {
+      const cls = classify(e);
+      if (raw) { try { raw.destroy(); } catch (_) {} }
+      finish({ ...out, errorCode: cls.code, errorMsg: cls.msg });
+    });
+
+    function sendHttp(sock) {
+      const t2 = Date.now();
+      const req = http.request({
+        createConnection: () => sock,
+        host: info.host,
+        path: info.path,
+        method: 'GET',
+        headers: { Host: info.host, 'User-Agent': UA, 'Accept': '*/*', 'Cache-Control': 'no-cache', 'Connection': 'close' }
+      }, (res) => {
+        out.ttfbMs = Date.now() - t2;
+        out.httpCode = res.statusCode || 0;
+        out.location = String(res.headers.location || '');
+        res.resume();
+        res.on('end', () => { out.ok = true; finish(out); });
+        res.on('error', () => { finish(out); });
+      });
+      req.on('error', (e) => {
+        const cls = classify(e);
+        finish({ ...out, errorCode: cls.code, errorMsg: cls.msg });
+      });
+      req.setTimeout(timeoutMs, () => {
+        req.destroy();
+        finish({ ...out, errorCode: 'TIMEOUT', errorMsg: '响应超时' });
+      });
+      req.end();
+    }
+  });
+}
+
+/**
+ * HTTP(S) 探测（含分段计时 + 重定向链校验）
+ * 跟随最多 5 跳重定向（3xx+Location），检测循环与超限，每跳重新过 SSRF 校验。
  * @param {string} rawUrl 站点 http/https URL
  * @param {number} timeoutMs 超时
- * @returns Promise<{ok, httpCode, delay, errorCode, errorMsg, ip, dnsMs, tcpMs, tlsMs, ttfbMs, location}>
+ * @returns Promise<{ok, httpCode, delay, errorCode, errorMsg, ip, dnsMs, tcpMs, tlsMs, ttfbMs, location, redirects}>
  */
 async function httpProbe(rawUrl, timeoutMs = DEFAULT_TIMEOUT) {
   const start = Date.now();
   const base = {
     ok: false, httpCode: 0, delay: 0, errorCode: '', errorMsg: '', ip: '',
-    dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, location: ''
+    dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, location: '', redirects: []
   };
+  const MAX_REDIRECTS = 5;
 
   let info;
   try {
-    info = await parseProbeUrl(rawUrl); // SSRF 校验 + DNS 解析（含计时可忽略，DNS 耗时单独在下方精确计时）
+    info = await parseProbeUrl(rawUrl); // SSRF 校验 + DNS 解析
   } catch (e) {
-    return { ...base, errorCode: e.code || 'PROBE_ERROR', errorMsg: e.message };
-  }
-  base.ip = info.ip;
-  const isHttps = info.url.startsWith('https:');
-
-  // 1) TCP 连接（用已解析 IP，防二次解析）
-  const t0 = Date.now();
-  let raw;
-  try {
-    raw = await connectTcp(info.ip, info.port, timeoutMs);
-    base.tcpMs = Date.now() - t0;
-  } catch (e) {
-    const cls = classify(e);
-    return { ...base, errorCode: cls.code, errorMsg: cls.msg, delay: Date.now() - start };
+    return { ...base, errorCode: e.code || 'PROBE_ERROR', errorMsg: e.message, delay: Date.now() - start };
   }
 
-  // 2) TLS 握手（HTTPS）
-  if (isHttps) {
-    const t1 = Date.now();
-    try {
-      raw = await upgradeTls(raw, info.host, timeoutMs);
-      base.tlsMs = Date.now() - t1;
-    } catch (e) {
-      const cls = classify(e);
-      raw.destroy();
-      return { ...base, errorCode: cls.code, errorMsg: cls.msg, delay: Date.now() - start };
+  let result = { ...base, ip: info.ip };
+  let currentUrl = info.url;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    result = await httpProbeOnce(info, timeoutMs, { ...base, ip: info.ip, redirects: result.redirects });
+
+    // 重定向：3xx 且带 Location
+    if (result.ok && result.httpCode >= 300 && result.httpCode < 400 && result.location) {
+      const loc = result.location;
+      result.redirects.push({ status: result.httpCode, location: loc });
+      // 解析下一跳（防相对路径 / 协议-相对 URL）
+      let next;
+      try { next = new URL(loc, currentUrl).toString(); } catch (e) {
+        result.ok = false; result.errorCode = 'REDIRECT_INVALID'; result.errorMsg = '重定向地址无效: ' + loc;
+        break;
+      }
+      if (next === currentUrl) {
+        result.ok = false; result.errorCode = 'REDIRECT_LOOP'; result.errorMsg = '检测到重定向循环';
+        break;
+      }
+      try {
+        info = await parseProbeUrl(next); // 每一跳重新 SSRF 校验，防重定向到内网
+      } catch (e) {
+        result.ok = false; result.errorCode = e.code || 'PROBE_ERROR'; result.errorMsg = e.message;
+        break;
+      }
+      currentUrl = info.url;
+      result.ip = info.ip;
+      result.dnsMs = 0; result.tcpMs = 0; result.tlsMs = 0; result.ttfbMs = 0;
+      continue;
     }
+    break;
   }
 
-  // 3) 发送 HTTP 请求，测 TTFB
-  const t2 = Date.now();
-  const result = await new Promise((resolve) => {
-    const req = http.request({
-      createConnection: () => raw,
-      host: info.host,
-      path: info.path,
-      method: 'GET',
-      headers: { Host: info.host, 'User-Agent': UA, 'Accept': '*/*', 'Cache-Control': 'no-cache', 'Connection': 'close' }
-    }, (res) => {
-      base.ttfbMs = Date.now() - t2;
-      base.httpCode = res.statusCode || 0;
-      base.location = String(res.headers.location || '');
-      res.resume();
-      res.on('end', () => {
-        base.ok = true;
-        base.delay = Date.now() - start;
-        resolve(base);
-      });
-      res.on('error', () => { base.delay = Date.now() - start; resolve(base); });
-    });
-    req.on('error', (e) => {
-      const cls = classify(e);
-      base.errorCode = cls.code; base.errorMsg = cls.msg; base.delay = Date.now() - start;
-      resolve(base);
-    });
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      base.errorCode = 'TIMEOUT'; base.errorMsg = '响应超时'; base.delay = Date.now() - start;
-      resolve(base);
-    });
-    req.end();
-  });
-  try { raw.destroy(); } catch (e) { /* ignore */ }
+  if (result.redirects.length > MAX_REDIRECTS) {
+    result.ok = false; result.errorCode = 'REDIRECT_EXCEED'; result.errorMsg = '重定向次数超过限制（' + MAX_REDIRECTS + '）';
+  }
+  result.delay = Date.now() - start;
+  try { if (result._sock) result._sock.destroy(); } catch (_) {}
   return result;
 }
 
@@ -168,4 +219,4 @@ function tcpProbe(host, port, timeoutMs = 5000) {
   });
 }
 
-module.exports = { httpProbe, tcpProbe, classify };
+module.exports = { httpProbe, httpProbeOnce, tcpProbe, classify };

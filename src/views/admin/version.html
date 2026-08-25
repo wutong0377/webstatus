@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>版本更新 - WebStatus</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
 </head>
 <body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script src="/assets/js/common.js?v=2.1.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, t } = WebStatus;
@@ -55,7 +55,7 @@
       repoRow.lastChild.rel = 'noopener';
       infoBox.appendChild(repoRow);
 
-      /* ---------- 检查更新 ---------- */
+      /* ---------- 检查更新 + 备份 ---------- */
       const updBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5');
       page.appendChild(updBox);
       updBox.appendChild(h('p', 'text-xs text-slate-400 mb-4', esc(t('version.updateTips'))));
@@ -63,8 +63,14 @@
       const updResult = h('div', 'text-sm space-y-3');
       updBox.appendChild(updResult);
 
+      const actionRow = h('div', 'flex items-center gap-3 flex-wrap');
       const checkBtn = h('button', 'px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium hover:opacity-90', t('version.checkUpdate'));
-      updBox.appendChild(checkBtn);
+      actionRow.appendChild(checkBtn);
+      const backupBtn = h('a', 'px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800',
+        '<span class="inline-flex items-center gap-1.5">' + icon('download', 'w-4 h-4') + '导出数据库备份</span>');
+      backupBtn.href = '/api/admin/settings/export-backup';
+      actionRow.appendChild(backupBtn);
+      updBox.appendChild(actionRow);
 
       checkBtn.addEventListener('click', async () => {
         checkBtn.disabled = true;

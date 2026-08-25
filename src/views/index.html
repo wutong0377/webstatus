@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>网站状态监控 WebStatus</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.0.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.1.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -28,6 +28,11 @@
       </div>
     </div>
   </header>
+
+  <!-- 维护窗口 -->
+  <div class="max-w-6xl mx-auto px-4 mt-4">
+    <div id="window-bar" class="hidden space-y-2"></div>
+  </div>
 
   <!-- 公告栏 -->
   <div class="max-w-6xl mx-auto px-4 mt-4">
@@ -56,7 +61,7 @@
     <div id="ws-copyright" class="mt-2"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.0.0"></script>
+  <script src="/assets/js/common.js?v=2.1.0"></script>
   <script>
   (() => {
     const $ = s => document.querySelector(s);
@@ -64,6 +69,7 @@
 
     let sites = [];
     let miniData = {};
+    let availMap = {};
     let refreshSec = 30;
     let view = localStorage.getItem('ws_view') || 'card';
 
@@ -102,6 +108,26 @@
       grid.innerHTML = '';
       grid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
       for (let i = 0; i < 6; i++) grid.appendChild(skeleton('h-40'));
+    }
+
+    /* ---------- 维护窗口（v2） ---------- */
+    function renderWindows(windows) {
+      const bar = $('#window-bar');
+      if (!bar) return;
+      if (!windows || !windows.length) { bar.classList.add('hidden'); return; }
+      bar.classList.remove('hidden');
+      bar.innerHTML = '';
+      windows.forEach(w => {
+        const item = h('div', 'bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl p-3.5 flex items-start gap-3');
+        item.innerHTML = '<span class="text-blue-500 flex-shrink-0 mt-0.5">' + icon('wrench', 'w-4 h-4') + '</span>';
+        const content = h('div', 'min-w-0 text-sm');
+        content.appendChild(h('div', 'font-medium text-blue-700 dark:text-blue-300', esc(w.title || '维护中')));
+        const line = h('div', 'mt-0.5 text-xs text-blue-600 dark:text-blue-400');
+        line.textContent = (w.site_name ? ('站点：' + w.site_name + ' · ') : '') + '维护时段 ' + esc(w.start_at) + ' → ' + esc(w.end_at);
+        content.appendChild(line);
+        item.appendChild(content);
+        bar.appendChild(item);
+      });
     }
 
     /* ---------- 公告 ---------- */
@@ -188,15 +214,34 @@
         '<div class="bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5"><div class="text-[11px] text-slate-400">' + esc(t('home.metric.checked')) + '</div><div class="text-sm font-medium tabular text-xs">' + (s.last_checked_at ? esc(String(s.last_checked_at).slice(5, 16)) : '-') + '</div></div>';
       el.appendChild(metrics);
 
-      const mini = (miniData && miniData[s.id]) || [];
-      if (mini.length) {
-        const tl = h('div', 'mt-3 flex items-center gap-1');
-        mini.forEach(p => {
+      // 状态方块图（近 96 个探测点，一个方块一个状态）
+      const blocks = (miniData && miniData[s.id]) || [];
+      if (blocks.length) {
+        const bg = h('div', 'mt-3 grid gap-[2px]');
+        bg.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
+        blocks.slice(-96).forEach(p => {
           const m = (p && STATUS_META[p.status]) || STATUS_META[0];
-          tl.appendChild(h('div', 'h-1.5 flex-1 rounded-full ' + m.dot));
+          const sq = h('div', 'aspect-square rounded-[2px] ' + m.dot);
+          sq.title = (p.checked_at || '') + ' · ' + (p.status == null ? '-' : tStatus(p.status));
+          bg.appendChild(sq);
         });
-        el.appendChild(tl);
+        el.appendChild(bg);
       }
+
+      // 可用率 + 证书/域名状态
+      const metaRow = h('div', 'mt-2.5 flex items-center justify-between gap-2 text-[11px] flex-wrap');
+      const left = h('div', 'flex items-center gap-2 text-slate-500');
+      if (availMap[s.id] != null) left.appendChild(h('span', 'tabular', '近7天 ' + availMap[s.id] + '%'));
+      if (Number(s.check_cert) === 1 && s.cert_status != null) {
+        left.appendChild(h('span', 'flex items-center gap-0.5 ' + (Number(s.cert_status) === 1 ? 'text-emerald-500' : Number(s.cert_status) === 2 ? 'text-amber-500' : 'text-red-500'),
+          (Number(s.cert_status) === 1 ? '' : Number(s.cert_status) === 2 ? '· 证书预警' : '· 证书异常')));
+      }
+      if (Number(s.check_domain) === 1 && s.domain_status != null) {
+        left.appendChild(h('span', 'flex items-center gap-0.5 ' + (Number(s.domain_status) === 1 ? 'text-emerald-500' : Number(s.domain_status) === 2 ? 'text-amber-500' : 'text-red-500'),
+          (Number(s.domain_status) === 1 ? '' : Number(s.domain_status) === 2 ? '· 域名预警' : '· 域名异常')));
+      }
+      if (left.childNodes.length) metaRow.appendChild(left);
+      el.appendChild(metaRow);
 
       if (showErr && s.last_error_code) {
         el.appendChild(h('div', 'mt-3 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg p-2.5',
@@ -259,11 +304,16 @@
         const r = await api('/api/public/status');
         refreshSec = r.refresh || 30;
         sites = (r.data || []).filter(Boolean);
+        try { renderWindows(r.windows || []); } catch (e) { /* 维护窗口渲染失败不影响主流程 */ }
         const ids = sites.map(s => s.id).join(',');
         if (ids) {
           const m = await api('/api/public/mini-timeline?id=' + ids).catch(() => ({ data: {} }));
           miniData = m.data || {};
         } else { miniData = {}; }
+        try {
+          const a = await api('/api/public/availability').catch(() => ({ data: {} }));
+          availMap = a.data || {};
+        } catch (e) { availMap = {}; }
         try { renderStats(); } catch (e) { /* 统计异常不中断 */ }
         renderSites();
       } catch (e) {

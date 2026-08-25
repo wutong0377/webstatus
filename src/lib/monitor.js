@@ -13,11 +13,12 @@
 const { query } = require('../db');
 const { httpProbe, tcpProbe } = require('./probe');
 const { ping } = require('./ping');
+const { resolveHost } = require('../utils/net');
 const { judgeStatus, STATUS } = require('./status');
 const settingsSvc = require('./settings');
 const mailer = require('./mailer');
 const alert = require('./alert');
-const { checkDns, checkCert, saveCertCheck, checkOcsp } = require('./checks');
+const { checkDns, checkCert, saveCertCheck, checkOcsp, checkSecurityHeaders } = require('./checks');
 const { checkDomainExpiry } = require('./whois');
 const { formatDateTime } = require('../utils/time');
 
@@ -119,12 +120,62 @@ async function runOnce() {
   return result;
 }
 
+/** 取主机名（去掉协议/路径） */
+function hostOf(domain) {
+  try { return new URL(domain).hostname; } catch (e) { return String(domain || '').trim(); }
+}
+
+/** ICMP 主探测：按 monitor_mode='icmp' 时作为主状态来源（需先过 SSRF 校验） */
+async function icmpProbe(domain, timeoutMs) {
+  const host = hostOf(domain);
+  try {
+    const r = await resolveHost(host);
+    if (r.blocked) return { ok: false, delay: 0, httpCode: 0, errorCode: 'SSRF_BLOCKED', errorMsg: '目标地址解析到内网/回环地址，已拦截', dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, ip: '', location: '' };
+  } catch (e) {
+    return { ok: false, delay: 0, httpCode: 0, errorCode: 'DNS_FAILED', errorMsg: '域名解析失败: ' + host, dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, ip: '', location: '' };
+  }
+  const p = await ping(host, timeoutMs);
+  return {
+    ok: p.ok, delay: p.delay, httpCode: 0,
+    errorCode: p.ok ? '' : 'PING_FAILED',
+    errorMsg: p.ok ? '' : 'ICMP Ping 无响应',
+    dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, ip: '', location: ''
+  };
+}
+
+/** TCP 主探测：按 monitor_mode='tcp' 时使用（同样过 SSRF 校验） */
+async function tcpSiteProbe(site, timeoutMs) {
+  const host = hostOf(site.domain);
+  const port = Number(site.tcp_port) || 80;
+  try {
+    const r = await resolveHost(host);
+    if (r.blocked) return { ok: false, delay: 0, httpCode: 0, errorCode: 'SSRF_BLOCKED', errorMsg: '目标地址解析到内网/回环地址，已拦截', dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, ip: '', location: '' };
+  } catch (e) {
+    return { ok: false, delay: 0, httpCode: 0, errorCode: 'DNS_FAILED', errorMsg: '域名解析失败: ' + host, dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, ip: '', location: '' };
+  }
+  const r = await tcpProbe(host, port, timeoutMs);
+  return {
+    ok: r.ok, delay: r.delay, httpCode: 0,
+    errorCode: r.ok ? '' : (r.errorCode || 'TCP_FAILED'),
+    errorMsg: r.ok ? '' : ('端口 ' + host + ':' + port + ' 连接失败：' + (r.errorMsg || '')),
+    dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, ip: '', location: ''
+  };
+}
+
 /** 探测单个站点：写历史 + 状态转换处理 */
 async function checkSite(site, settings, result) {
-  const probe = await httpProbe(site.domain, PROBE_TIMEOUT);
-  if (probe.ok) {
-    // 异步补充 ping 延迟参考，失败不影响结果
-    ping(site.domain).catch(() => {});
+  // 按监控模式选择探测方式（http / tcp / icmp）
+  let probe;
+  if (site.monitor_mode === 'icmp') {
+    probe = await icmpProbe(site.domain, PROBE_TIMEOUT);
+  } else if (site.monitor_mode === 'tcp') {
+    probe = await tcpSiteProbe(site, PROBE_TIMEOUT);
+  } else {
+    probe = await httpProbe(site.domain, PROBE_TIMEOUT);
+    if (probe.ok) {
+      // HTTP 模式下异步补充 ping 延迟参考，失败不影响结果
+      ping(site.domain).catch(() => {});
+    }
   }
   const judged = judgeStatus(probe, settings.slow_threshold, site.expected_status);
   if (judged.status === STATUS.DOWN) result.down++;
@@ -132,9 +183,10 @@ async function checkSite(site, settings, result) {
   else result.up++;
 
   await query(
-    'INSERT INTO status_history (site_id, status, delay, http_code, error_code, error_msg, checked_at) VALUES (?,?,?,?,?,?,?)',
+    'INSERT INTO status_history (site_id, status, delay, http_code, error_code, error_msg, checked_at, dns_ms, tcp_ms, tls_ms, ttfb_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     [site.id, judged.status, probe.delay, judged.httpCode || null, judged.errorCode || '',
-     String(judged.errorMsg || probe.errorMsg || '').slice(0, 500), formatDateTime()]
+     String(judged.errorMsg || probe.errorMsg || '').slice(0, 500), formatDateTime(),
+     Math.round(probe.dnsMs || 0), Math.round(probe.tcpMs || 0), Math.round(probe.tlsMs || 0), Math.round(probe.ttfbMs || 0)]
   );
 
   await processState(site, judged, probe, settings);
@@ -165,6 +217,10 @@ async function runEnhanceChecks(site) {
     // OCSP 证书吊销检测（独立开关）
     if (Number(site.check_ocsp) === 1) {
       const ocspRes = await checkOcsp(cert._rawCert, cert._rawIssuer);
+      // 保存吊销状态供页面展示（cert_checks.ocsp_status）
+      try {
+        await query('UPDATE cert_checks SET ocsp_status = ? WHERE site_id = ? ORDER BY id DESC LIMIT 1', [ocspRes.status, site.id]);
+      } catch (_) { /* 忽略更新失败 */ }
       if (ocspRes.status === 3) {
         await alert.sendAlert({
           site,
@@ -224,6 +280,27 @@ async function runEnhanceChecks(site) {
         level: 3,
         title: '【端口异常】' + site.name + ':' + site.tcp_port,
         content: '端口 ' + host + ':' + site.tcp_port + ' 连接失败：' + tcp.errorMsg
+      });
+    }
+  }
+
+  // HTTP 安全头巡检（HSTS/CSP/X-Frame-Options 等）
+  if (Number(site.check_headers) === 1) {
+    const sh = await checkSecurityHeaders(site.domain);
+    try {
+      await query(
+        'INSERT INTO security_checks (site_id, ok, findings, error_code, checked_at) VALUES (?,?,?,?,?)',
+        [site.id, sh.ok ? 1 : 0, JSON.stringify(sh.findings || []).slice(0, 4000), sh.errorCode || '', formatDateTime()]
+      );
+    } catch (_) { /* 记录失败不影响巡检 */ }
+    const missing = (sh.findings || []).filter(f => !f.present).map(f => f.header);
+    if (sh.ok && missing.length) {
+      await alert.sendAlert({
+        site,
+        alertType: 'headers',
+        level: 2,
+        title: '【安全头缺失】' + site.name,
+        content: '站点 <strong>' + site.name + '</strong>（' + site.domain + '）<br>缺少以下安全响应头：<code>' + missing.join('</code>, <code>') + '</code>'
       });
     }
   }
@@ -301,8 +378,11 @@ async function getSitesLatest() {
   const rows = await query(`
     SELECT s.id, s.name, s.domain, s.description, s.seo_title, s.seo_desc, s.seo_keywords,
            s.icon_url, s.enabled, s.maintenance, s.maintenance_note, s.sort,
+           s.check_cert, s.check_domain, s.check_ocsp, s.cert_warn_days, s.domain_warn_days,
            h.status AS last_status, h.delay AS last_delay, h.http_code AS last_http_code,
-           h.error_code AS last_error_code, h.error_msg AS last_error_msg, h.checked_at AS last_checked_at
+           h.error_code AS last_error_code, h.error_msg AS last_error_msg, h.checked_at AS last_checked_at,
+           (SELECT c.status FROM cert_checks c WHERE c.site_id = s.id ORDER BY c.id DESC LIMIT 1) AS cert_status,
+           (SELECT d.status FROM domain_checks d WHERE d.site_id = s.id ORDER BY d.id DESC LIMIT 1) AS domain_status
     FROM sites s
     LEFT JOIN (
       SELECT sh.* FROM status_history sh
