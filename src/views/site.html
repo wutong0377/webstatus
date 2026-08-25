@@ -7,7 +7,7 @@
   <meta name="description" content="WebStatus 网站状态监控 - 站点实时状态、延迟曲线与故障记录">
   <meta name="keywords" content="WebStatus,网站状态监控,uptime,status">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.4.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -75,7 +75,7 @@
     <div id="ws-copyright"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.2.0"></script>
+  <script src="/assets/js/common.js?v=2.4.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, fmtTime, t, tStatus, skeleton } = WebStatus;
@@ -169,8 +169,11 @@
         c.appendChild(secLine('剩余天数', (cert.days_left !== null && cert.days_left !== undefined) ? cert.days_left + ' 天' : '-'));
         const san = parseSan(cert.san);
         if (san.length) c.appendChild(secLine('SAN 域名', san.length + ' 个'));
-        c.appendChild(secLine('OCSP 吊销', cert.ocsp_status === 3 ? '已吊销' : (cert.ocsp_status === 2 ? '无法校验' : '未吊销')));
-        if (Number(cert.status) !== 1 && cert.error_code) c.appendChild(h('div', 'text-xs text-red-500 mt-1', esc(cert.error_code)));
+        c.appendChild(secLine('OCSP 吊销', cert.ocsp_status === 3 ? '已吊销' : (cert.ocsp_status === 2 ? '未校验（无 ocsp 依赖）' : '未吊销')));
+        if (Number(cert.status) !== 1 && cert.error_code) {
+          const certMsg = cert.error_code === 'NOT_HTTPS' ? '站点非 HTTPS，未进行证书检测' : (cert.error_code === 'CERT_TIMEOUT' ? '证书检测超时' : cert.error_code);
+          c.appendChild(h('div', 'text-xs text-amber-600 dark:text-amber-400 mt-1', esc(certMsg)));
+        }
         grid.appendChild(c);
       }
       if (hasDom) {
@@ -298,6 +301,12 @@
         el.appendChild(left);
         const mid = h('div', 'flex-1 text-xs text-slate-400 min-w-0');
         mid.textContent = f.error_msg || '';
+        // 故障可能原因说明
+        if (f.explain) {
+          mid.appendChild(h('div', 'mt-1.5 text-xs text-slate-500 bg-slate-50 dark:bg-slate-800/60 rounded-lg p-2.5 space-y-1',
+            '<div><span class="text-slate-400">成因：</span>' + esc(f.explain.cause || '') + '</div>' +
+            (f.explain.tips ? '<div><span class="text-slate-400">建议：</span>' + esc(f.explain.tips) + '</div>' : '')));
+        }
         el.appendChild(mid);
         const right = h('div', 'text-xs text-slate-500 tabular sm:text-right');
         right.textContent = fmtTime(f.started_at) + (f.ended_at ? ' → ' + fmtTime(f.ended_at) : ' · ' + t('site.ongoing')) + (f.duration_sec ? '（' + t('site.duration') + ' ' + fmtDur(f.duration_sec) + '）' : '');

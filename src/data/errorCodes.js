@@ -315,6 +315,12 @@ const ERROR_CODES = {
     causes: ['RDAP 引导服务器不可达', '网络异常', '域名 TLD 无对应 RDAP 服务'],
     tips: '检查服务器网络连通性；稍后重试；必要时在注册商后台查询域名状态。'
   },
+  DOMAIN_LOOKUP_UNAVAILABLE: {
+    code: 'DOMAIN_LOOKUP_UNAVAILABLE', name: '无法自动获取到期信息', level: 2,
+    cause: '该域名所属注册局（如 CNNIC 管理的 .cn）暂不支持通过 RDAP/WHOIS 自动查询到期时间。',
+    causes: ['注册局 RDAP 服务不完善', 'rdap.org 引导不稳定', '域名状态特殊'],
+    tips: '到域名注册商后台查看到期时间；可手动在系统里记录到期日期。'
+  },
 
   // ================= 系统自定义 =================
   URL_INVALID: {

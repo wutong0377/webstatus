@@ -8,9 +8,11 @@ const router = express.Router();
 const { query, queryOne } = require('../db');
 const cache = require('../lib/cache');
 const settingsSvc = require('../lib/settings');
-const { getSitesLatest } = require('../lib/monitor');
+const { getSitesLatest, attachSecurityStatus, runOnce } = require('../lib/monitor');
+const { config } = require('../config');
 const { downsample } = require('../lib/downsample');
 const { STATUS_TEXT } = require('../lib/status');
+const { getErrorExplain } = require('../data/errorCodes');
 const { rateLimit } = require('../middleware/rateLimit');
 
 // 公开接口 IP 限流
@@ -54,7 +56,7 @@ router.get('/status', async (req, res, next) => {
     const ttl = Math.max(1, Number(settings.cache_ttl) || 5) * 1000;
     let data = cache.get('pub_status');
     if (!data) {
-      data = await getSitesLatest();
+      data = await attachSecurityStatus(await getSitesLatest());
       cache.set('pub_status', data, ttl);
     }
     // CDN / 浏览器缓存头（配合 CF 边缘缓存）
@@ -127,10 +129,14 @@ router.get('/site/:id', async (req, res, next) => {
         site,
         chart: downsample(historyRows, 200),
         changes: changeRows,
-        faults: faultRows.map(f => ({
-          ...f,
-          status_text: STATUS_TEXT[f.fault_status] || '异常'
-        })),
+        faults: faultRows.map(f => {
+          const ex = getErrorExplain(f.error_code, f.error_msg);
+          return {
+            ...f,
+            status_text: STATUS_TEXT[f.fault_status] || '异常',
+            explain: { name: ex.name, cause: ex.cause, causes: ex.causes, tips: ex.tips, level: ex.level }
+          };
+        }),
         cert,
         domain
       };
@@ -220,5 +226,74 @@ router.get('/site/:id/export', async (req, res, next) => {
     res.send(csv);
   } catch (e) { next(e); }
 });
+
+/* ---------------- 极验(GeeTest)人机验证 + 手动触发检测（v2.4） ---------------- */
+const runCheckCalls = new Map(); // ip -> 上次触发时间
+
+/** 极验 v3 服务端校验 */
+async function geetestValidate(gt, challenge, validate, seccode) {
+  try {
+    const params = new URLSearchParams({
+      gt: String(gt || ''), challenge: String(challenge || ''),
+      validate: String(validate || ''), seccode: String(seccode || ''), json: '1'
+    });
+    const res = await fetch('https://api.geetest.com/validate.php?' + params.toString(), { signal: AbortSignal.timeout(8000) });
+    const text = await res.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch (e) {}
+    return { ok: data.seccode === String(seccode || ''), raw: text };
+  } catch (e) { return { ok: false, raw: (e && e.message) || '校验异常' }; }
+}
+
+/** 极验 v3 注册获取 challenge */
+async function geetestRegister(captchaId) {
+  const res = await fetch('https://api.geetest.com/register.php?gt=' + encodeURIComponent(captchaId) + '&json=1', { signal: AbortSignal.timeout(8000) });
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch (e) {}
+  return data.challenge || '';
+}
+
+/** 获取极验初始化参数（前台加载验证码用） */
+router.get('/captcha/init', async (req, res, next) => {
+  try {
+    const g = config.geetest || {};
+    if (!g.enabled || !g.captcha_id) return res.json({ code: 0, enabled: false });
+    const challenge = await geetestRegister(g.captcha_id);
+    res.json({ code: 0, enabled: true, gt: g.captcha_id, challenge, new_captcha: true });
+  } catch (e) { next(e); }
+});
+
+/**
+ * 前台「获取最新情况」：手动触发一轮完整巡检
+ * 限频：每 IP 60 秒内最多 1 次；若极验已启用，60 秒内的再次触发需通过人机验证。
+ */
+router.post('/run-check',
+  rateLimit({ windowMs: 60 * 1000, max: 10, message: '触发过于频繁，请稍后再试' }),
+  async (req, res, next) => {
+    try {
+      const g = config.geetest || {};
+      const ip = req.ip || 'unknown';
+      const now = Date.now();
+      const last = runCheckCalls.get(ip) || 0;
+      const needsCaptcha = g.enabled && g.captcha_id && (now - last) < 60 * 1000;
+
+      if (needsCaptcha) {
+        const { gt, challenge, validate, seccode } = (req.body && typeof req.body === 'object') ? req.body : {};
+        if (!challenge || !validate || !seccode) {
+          return res.status(403).json({ code: 403, needCaptcha: true, message: '请先完成人机验证' });
+        }
+        const v = await geetestValidate(gt, challenge, validate, seccode);
+        if (!v.ok) return res.status(403).json({ code: 403, needCaptcha: true, message: '人机验证失败，请重试' });
+      }
+      runCheckCalls.set(ip, now);
+      // 清理过期记录，防止内存膨胀
+      if (runCheckCalls.size > 5000) {
+        for (const [k, t] of runCheckCalls) if (now - t > 3600000) runCheckCalls.delete(k);
+      }
+      const result = await runOnce();
+      res.json({ code: 0, message: '已触发一轮检测', data: result });
+    } catch (e) { next(e); }
+  });
 
 module.exports = router;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>告警设置 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.4.0">
 </head>
 <body>
   <div id="admin-shell"></div>
@@ -93,7 +93,7 @@
     </div>
   </div>
 
-  <script src="/assets/js/common.js?v=2.2.0"></script>
+  <script src="/assets/js/common.js?v=2.4.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast } = WebStatus;
@@ -126,7 +126,8 @@
         { key: 'logs', label: '告警日志' },
         { key: 'webhooks', label: 'Webhook 管理' },
         { key: 'windows', label: '维护窗口' },
-        { key: 'onebot', label: 'OneBot QQ' }
+        { key: 'onebot', label: 'OneBot QQ' },
+        { key: 'geetest', label: '极验人机验证' }
       ];
       const tabBar = h('div', 'flex items-center gap-1 border-b border-slate-200 dark:border-slate-800 mb-5');
       page.appendChild(tabBar);
@@ -155,6 +156,7 @@
         if (key === 'webhooks') loadWebhooks();
         if (key === 'windows') loadWindows();
         if (key === 'onebot') loadOnebot();
+        if (key === 'geetest') loadGeetest();
       }
 
       async function loadSites() {
@@ -568,9 +570,78 @@
         }
       });
 
+      /* ================= 极验人机验证 ================= */
+      const gtPanel = panels.geetest;
+      const gtBox = h('div', 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 max-w-lg');
+      gtPanel.appendChild(gtBox);
+      gtBox.appendChild(h('h2', 'text-sm font-semibold mb-4', '极验(GeeTest)人机验证'));
+      gtBox.appendChild(h('div', 'text-xs text-slate-400 mb-4', '用于前台「获取最新情况」按钮的防滥用。首次点击免验证，60 秒内的再次触发需通过人机验证。在极验官网注册免费账号获取 ID 与 Key。'));
+
+      const gtForm = h('div', 'space-y-4');
+      const gtEnabledWrap = h('div', '');
+      const gtEnabled = h('input');
+      gtEnabled.type = 'checkbox';
+      gtEnabled.id = 'gt-enabled';
+      gtEnabled.className = 'w-4 h-4 accent-blue-600';
+      const gtEnabledLabel = h('label', 'flex items-center gap-2.5 text-sm cursor-pointer');
+      gtEnabledLabel.appendChild(gtEnabled);
+      gtEnabledLabel.appendChild(h('span', '', '启用极验人机验证'));
+      gtEnabledWrap.appendChild(gtEnabledLabel);
+      gtForm.appendChild(gtEnabledWrap);
+
+      const gtIdWrap = h('div', '');
+      gtIdWrap.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', '极验 captcha_id'));
+      const gtId = h('input', inp);
+      gtId.id = 'gt-id';
+      gtId.placeholder = '在极验后台获取';
+      gtIdWrap.appendChild(gtId);
+      gtForm.appendChild(gtIdWrap);
+
+      const gtKeyWrap = h('div', '');
+      gtKeyWrap.appendChild(h('label', 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5', '极验 captcha_key（留空则不修改）'));
+      const gtKey = h('input', inp);
+      gtKey.id = 'gt-key';
+      gtKey.type = 'password';
+      gtKey.placeholder = '已保存的 Key 将保留';
+      gtKeyWrap.appendChild(gtKey);
+      gtForm.appendChild(gtKeyWrap);
+
+      const gtErr = h('div', 'hidden text-sm text-red-600 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2');
+      gtForm.appendChild(gtErr);
+      const gtSave = h('button', 'px-5 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium', '保存配置');
+      gtForm.appendChild(gtSave);
+      gtBox.appendChild(gtForm);
+
+      async function loadGeetest() {
+        try {
+          const r = await api('/api/admin/alerts/geetest');
+          const d = r.data || {};
+          gtEnabled.checked = !!d.enabled;
+          gtId.value = d.captcha_id || '';
+          gtKey.value = '';
+          gtKey.placeholder = d.key_masked ? '已保存（输入新值可修改）' : '未设置';
+        } catch (e) { toast(e.message, 'error'); }
+      }
+
+      gtSave.addEventListener('click', async () => {
+        try {
+          await api('/api/admin/alerts/geetest', {
+            method: 'POST',
+            body: { enabled: gtEnabled.checked, captcha_id: gtId.value.trim(), captcha_key: gtKey.value }
+          });
+          toast('极验配置已保存', 'success');
+          loadGeetest();
+        } catch (e) {
+          gtErr.textContent = e.message || '保存失败';
+          gtErr.classList.remove('hidden');
+        }
+      });
+
       /* ---------- 初始化 ---------- */
       await loadSites();
-      switchTab('logs');
+      // 支持从主菜单「维护计划」深链：/admin/alerts#windows 直接打开维护窗口 tab
+      const initial = location.hash === '#windows' ? 'windows' : 'logs';
+      switchTab(initial);
     })();
   })();
   </script>

@@ -8,7 +8,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../../db');
 const cache = require('../../lib/cache');
-const { getSitesLatest, removeSiteMemory } = require('../../lib/monitor');
+const { getSitesLatest, attachSecurityStatus, removeSiteMemory } = require('../../lib/monitor');
 const { requiredStr, str, url, int, bool } = require('../../utils/validate');
 const { validateMonitorDomain } = require('../../utils/net');
 
@@ -70,7 +70,7 @@ function invalidateCache() {
 /* ---------------- 站点列表（含最新状态） ---------------- */
 router.get('/', async (req, res, next) => {
   try {
-    const data = await getSitesLatest();
+    const data = await attachSecurityStatus(await getSitesLatest());
     res.json({ code: 0, data, maxSites: MAX_SITES });
   } catch (e) { next(e); }
 });

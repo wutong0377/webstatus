@@ -59,14 +59,19 @@ function parseExpected(text) {
  * @returns Promise<{status:1|2|3, issuer, subject, san[], validFrom, validTo, daysLeft, errorCode, errorMsg}>
  */
 async function checkCert(site, timeoutMs = 8000) {
-  let host, port;
+  let host, port, isHttps = true;
   try {
     const u = new URL(site.domain);
     host = u.hostname;
     port = Number(u.port) || (u.protocol === 'https:' ? 443 : 80);
+    isHttps = u.protocol === 'https:';
   } catch (e) {
     host = site.domain;
     port = 443;
+  }
+  // 非 HTTPS 站点不做证书检测（避免对 80 端口做 TLS 导致超时/报错）
+  if (!isHttps) {
+    return { status: 2, issuer: '', subject: '', san: [], validFrom: null, validTo: null, daysLeft: 0, errorCode: 'NOT_HTTPS', errorMsg: '站点非 HTTPS，未进行证书检测', _rawCert: null, _rawIssuer: null };
   }
   const warnDays = Number(site.cert_warn_days) || 30;
   const out = { status: 1, issuer: '', subject: '', san: [], validFrom: null, validTo: null, daysLeft: 0, errorCode: '', errorMsg: '', _rawCert: null, _rawIssuer: null };

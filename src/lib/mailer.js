@@ -57,8 +57,10 @@ async function processQueue() {
       try {
         await transporter.sendMail(mail.options);
         await logMail(mail.to, mail.mailType, 1, '').catch(e => console.error('[mailer] 日志写入失败:', e.message));
+        console.log('[mailer] 发送成功 ' + mail.mailType + ' -> ' + mail.to);
       } catch (e) {
         await logMail(mail.to, mail.mailType, 0, (e && e.message) || '发送失败').catch(() => {});
+        console.error('[mailer] 发送失败 ' + mail.mailType + ' -> ' + mail.to + ': ' + ((e && e.message) || '未知错误'));
       }
     }
   } finally {

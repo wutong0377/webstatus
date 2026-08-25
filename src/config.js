@@ -45,6 +45,11 @@ const DEFAULTS = {
     group: '',
     private_uid: '' // 私聊目标 QQ（可选，配置后同时私聊推送）
   },
+  geetest: {
+    enabled: false, // 极验(GeeTest)人机验证：前台「获取最新情况」按钮防滥用
+    captcha_id: '',
+    captcha_key: ''
+  },
   installed: false
 };
 

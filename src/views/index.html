@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>网站状态监控 WebStatus</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.4.0">
 </head>
 <body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
@@ -25,6 +25,10 @@
         </div>
         <span id="lang-btn" class="inline-flex"></span>
         <button id="theme-btn" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"></button>
+        <button id="refresh-btn" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-medium hover:opacity-90">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          <span data-i18n="home.refreshNow">获取最新情况</span>
+        </button>
       </div>
     </div>
   </header>
@@ -61,7 +65,7 @@
     <div id="ws-copyright" class="mt-2"></div>
   </footer>
 
-  <script src="/assets/js/common.js?v=2.2.0"></script>
+  <script src="/assets/js/common.js?v=2.4.0"></script>
   <script>
   (() => {
     const $ = s => document.querySelector(s);
@@ -348,6 +352,51 @@
         poll();
       }, Math.max(5, refreshSec) * 1000);
     })();
+
+    /* ---------- 「获取最新情况」手动触发 + 极验人机验证 ---------- */
+    function doRefresh(payload) {
+      const btn = $('#refresh-btn');
+      if (btn) { btn.disabled = true; btn.querySelector('span').textContent = t('home.refreshing'); }
+      api('/api/public/run-check', { method: 'POST', body: payload || {} })
+        .then(r => { toast((r && r.message) || t('home.refreshDone'), 'success'); load(); loadNotices(); })
+        .catch(e => {
+          if (e.code === 403 && e.message && e.message.indexOf('人机验证') !== -1) { openCaptcha(); }
+          else toast(e.message || t('common.loadFailed'), 'error');
+        })
+        .finally(() => { if (btn) { btn.disabled = false; btn.querySelector('span').textContent = t('home.refreshNow'); } });
+    }
+
+    function openCaptcha() {
+      if (typeof initGeetest !== 'function') {
+        toast('人机验证组件加载失败，请稍后再试', 'error');
+        return;
+      }
+      api('/api/public/captcha/init').then(r => {
+        if (!r.data || !r.data.enabled) { doRefresh(); return; }
+        initGeetest({
+          gt: r.data.gt,
+          challenge: r.data.challenge,
+          new_captcha: r.data.new_captcha
+        }, captchaObj => {
+          captchaObj.onReady(() => captchaObj.showCaptcha());
+          captchaObj.onSuccess(() => {
+            const res = captchaObj.getValidate();
+            doRefresh(res); // { gt, challenge, validate, seccode }
+          });
+          captchaObj.onError(() => toast('人机验证出错，请重试', 'error'));
+        });
+      }).catch(e => toast(e.message || '初始化失败', 'error'));
+    }
+
+    const refreshBtn = $('#refresh-btn');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => doRefresh());
+
+    // 加载极验 SDK（未配置时仅首次点击直接触发，不加载 SDK）
+    if (typeof initGeetest !== 'function') {
+      const s = document.createElement('script');
+      s.src = 'https://static.geetest.com/static/tools/gt.js';
+      document.head.appendChild(s);
+    }
 
     // 版权渲染（校验失败会停止页面渲染）
     WebStatus.renderCopyright();

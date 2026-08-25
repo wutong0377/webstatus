@@ -146,4 +146,32 @@ router.post('/onebot', (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* ============ 极验人机验证配置（前台「获取最新情况」防滥用） ============ */
+router.get('/geetest', (req, res) => {
+  const gt = config.geetest || {};
+  res.json({
+    code: 0,
+    data: {
+      enabled: gt.enabled === true,
+      captcha_id: gt.captcha_id || '',
+      key_masked: gt.captcha_key ? '******' : ''
+    }
+  });
+});
+
+router.post('/geetest', (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const cur = config.geetest || {};
+    saveConfig({
+      geetest: {
+        enabled: bool(b.enabled),
+        captcha_id: str(b.captcha_id, 100, '极验 ID'),
+        captcha_key: (b.captcha_key && String(b.captcha_key) !== '') ? String(b.captcha_key) : cur.captcha_key
+      }
+    });
+    res.json({ code: 0, message: '极验配置已保存' });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

@@ -176,6 +176,7 @@ const WebStatus = (() => {
     'nav.report': { zh: '报表中心', en: 'Reports' },
     'nav.alerts': { zh: '告警设置', en: 'Alerts' },
     'nav.version': { zh: '版本更新', en: 'Version' },
+    'nav.maintenance': { zh: '维护计划', en: 'Maintenance' },
     'nav.front': { zh: '查看前台', en: 'View Front' },
     'admin.console': { zh: '运维控制台', en: 'Console' },
     'logout': { zh: '退出', en: 'Logout' },
@@ -189,6 +190,9 @@ const WebStatus = (() => {
     'home.metric.checked': { zh: '最近检测', en: 'Checked' },
     'home.maintenance': { zh: '维修说明：', en: 'Maintenance: ' },
     'home.probeError': { zh: '探测异常', en: 'Probe error' },
+    'home.refreshNow': { zh: '获取最新情况', en: 'Refresh now' },
+    'home.refreshing': { zh: '检测中...', en: 'Checking...' },
+    'home.refreshDone': { zh: '本轮检测完成', en: 'Check done' },
 
     'site.title': { zh: '站点详情', en: 'Site Details' },
     'site.chartTitle': { zh: '延迟曲线', en: 'Latency' },
@@ -539,6 +543,7 @@ const WebStatus = (() => {
     { path: '/admin/sessions', label: '会话管理', key: 'nav.sessions', icon: 'clock' },
     { path: '/admin/report', label: '报表中心', key: 'nav.report', icon: 'fileText' },
     { path: '/admin/alerts', label: '告警设置', key: 'nav.alerts', icon: 'alertTriangle' },
+    { path: '/admin/alerts#windows', label: '维护计划', key: 'nav.maintenance', icon: 'clock' },
     { path: '/admin/version', label: '版本更新', key: 'nav.version', icon: 'gear' }
   ];
 

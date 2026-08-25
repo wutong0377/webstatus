@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>报表中心 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.4.0">
 </head>
 <body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
   <div id="admin-shell"></div>
-  <script src="/assets/js/common.js?v=2.2.0"></script>
+  <script src="/assets/js/common.js?v=2.4.0"></script>
   <script>
   (() => {
     const { api, esc, h, toast, t } = WebStatus;
@@ -140,8 +140,9 @@
             row.appendChild(label);
             const cells = h('div', 'flex-1 grid gap-[2px]');
             cells.style.gridTemplateColumns = 'repeat(24, minmax(0, 1fr))';
-            for (let h = 0; h < hpd; h++) {
-              const item = data[d * hpd + h];
+            // 注意：循环变量不能用 h（会遮蔽 DOM 助手 h），用 hh
+            for (let hh = 0; hh < hpd; hh++) {
+              const item = data[d * hpd + hh];
               if (!item) continue;
               const blk = h('div', 'aspect-square rounded-[3px] ' + (BLOCK_BG[item.status] || BLOCK_BG[0]));
               blk.title = item.time + ' · ' + (BLOCK_TEXT[item.status] || '未知');

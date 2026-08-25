@@ -103,9 +103,27 @@ async function runOnce() {
       return result;
     }
     const sites = await query('SELECT * FROM sites WHERE enabled = 1 ORDER BY sort ASC, id ASC');
-    const normal = sites.filter(s => s.maintenance !== 1); // 维修模式不探测
+
+    // 当前生效的定时维护窗口：到点即生效，命中站点不探测、显示蓝色、耗时 0ms
+    const windows = await query(
+      'SELECT site_id FROM maintenance_windows WHERE enabled = 1 AND start_at <= NOW() AND end_at >= NOW()'
+    ).catch(() => []);
+    const windowSiteIds = new Set(windows.map(w => w.site_id));
+    const windowSites = sites.filter(s => windowSiteIds.has(s.id));
+    const manualMaint = sites.filter(s => s.maintenance === 1);
+    const normal = sites.filter(s => s.maintenance !== 1 && !windowSiteIds.has(s.id));
     result.total = sites.length;
-    result.maintenance = sites.length - normal.length;
+    result.maintenance = windowSites.length + manualMaint.length;
+
+    // 定时维护窗口内的站点：写入维修状态(蓝/0ms)，不探测、不计故障、不告警
+    for (const s of windowSites) {
+      try {
+        await query(
+          'INSERT INTO status_history (site_id, status, delay, http_code, error_code, error_msg, checked_at, dns_ms, tcp_ms, tls_ms, ttfb_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+          [s.id, STATUS.MAINTENANCE, 0, null, '', '维护计划生效中', formatDateTime(), 0, 0, 0, 0]
+        );
+      } catch (e) { /* 忽略写入失败 */ }
+    }
 
     // 分批次并发探测，严格限制并发数
     for (let i = 0; i < normal.length; i += CONCURRENCY) {
@@ -375,14 +393,14 @@ async function closeFaultIfAny(sid) {
  * 维修模式强制蓝色；从未探测过的站点 last_status 为 null。
  */
 async function getSitesLatest() {
+  // 注意：这里只查询稳定的基础字段 + 最新状态，绝不依赖 cert_checks / domain_checks 等
+  // 增强检测表（v2.1.0 曾把子查询写进来，导致这些表/列缺失时整个接口 500、前台全空）。
+  // 证书/域名状态由 attachSecurityStatus() 单独、容错地附加。
   const rows = await query(`
     SELECT s.id, s.name, s.domain, s.description, s.seo_title, s.seo_desc, s.seo_keywords,
            s.icon_url, s.enabled, s.maintenance, s.maintenance_note, s.sort,
-           s.check_cert, s.check_domain, s.check_ocsp, s.cert_warn_days, s.domain_warn_days,
            h.status AS last_status, h.delay AS last_delay, h.http_code AS last_http_code,
-           h.error_code AS last_error_code, h.error_msg AS last_error_msg, h.checked_at AS last_checked_at,
-           (SELECT c.status FROM cert_checks c WHERE c.site_id = s.id ORDER BY c.id DESC LIMIT 1) AS cert_status,
-           (SELECT d.status FROM domain_checks d WHERE d.site_id = s.id ORDER BY d.id DESC LIMIT 1) AS domain_status
+           h.error_code AS last_error_code, h.error_msg AS last_error_msg, h.checked_at AS last_checked_at
     FROM sites s
     LEFT JOIN (
       SELECT sh.* FROM status_history sh
@@ -391,12 +409,47 @@ async function getSitesLatest() {
     ) h ON h.site_id = s.id
     ORDER BY s.sort ASC, s.id ASC
   `);
+  // 定时维护窗口：命中站点的状态实时置为维修(蓝)，无需等下一轮巡检
+  const windows = await query(
+    'SELECT site_id FROM maintenance_windows WHERE enabled = 1 AND start_at <= NOW() AND end_at >= NOW()'
+  ).catch(() => []);
+  const winIds = new Set(windows.map(w => w.site_id));
   return rows.map(r => {
     let status = null;
-    if (r.maintenance === 1) status = STATUS.MAINTENANCE;
+    if (r.maintenance === 1 || winIds.has(r.id)) status = STATUS.MAINTENANCE;
     else if (r.last_status) status = r.last_status;
     return { ...r, status };
   });
+}
+
+/**
+ * 批量附加各站点最新证书/域名状态（容错：表或列缺失时静默返回空，绝不影响主查询/主流程）
+ * @param {Array<object>} sites 站点数组
+ * @returns {Promise<Array<object>>}
+ */
+async function attachSecurityStatus(sites) {
+  if (!sites || !sites.length) return sites;
+  const ids = sites.map(s => s.id);
+  const inClause = ids.map(() => '?').join(',');
+  const [certs, domains] = await Promise.all([
+    query(
+      'SELECT c.site_id, c.status FROM cert_checks c WHERE c.id IN (SELECT MAX(id) FROM cert_checks WHERE site_id IN (' + inClause + ') GROUP BY site_id)',
+      ids
+    ).catch(() => []),
+    query(
+      'SELECT d.site_id, d.status FROM domain_checks d WHERE d.id IN (SELECT MAX(id) FROM domain_checks WHERE site_id IN (' + inClause + ') GROUP BY site_id)',
+      ids
+    ).catch(() => [])
+  ]);
+  const certMap = {};
+  const domMap = {};
+  for (const c of certs) certMap[c.site_id] = c.status;
+  for (const d of domains) domMap[d.site_id] = d.status;
+  return sites.map(s => ({
+    ...s,
+    cert_status: certMap[s.id] != null ? certMap[s.id] : null,
+    domain_status: domMap[s.id] != null ? domMap[s.id] : null
+  }));
 }
 
 /** 服务运行状态（后台"查看服务运行状态"） */
@@ -420,4 +473,4 @@ function removeSiteMemory(sid) {
   siteLastAlert.delete(sid);
 }
 
-module.exports = { startMonitor, stopMonitor, runOnce, getSitesLatest, getServiceStatus, getLastResult, removeSiteMemory };
+module.exports = { startMonitor, stopMonitor, runOnce, getSitesLatest, attachSecurityStatus, getServiceStatus, getLastResult, removeSiteMemory };

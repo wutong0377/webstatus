@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>站点管理 - WebStatus 管理后台</title>
-  <link rel="stylesheet" href="/assets/css/app.css?v=2.2.0">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2.4.0">
 </head>
 <body>
   <div id="admin-shell"></div>
@@ -29,6 +29,7 @@
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.domain">站点域名/URL *</label>
             <input id="f-domain" class="inp" placeholder="https://example.com" maxlength="255">
+            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">请填写 <code>https://</code> 或 <code>http://</code> 开头的完整地址;填 HTTPS 才启用 SSL 证书检测。</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" data-i18n="sites.field.desc">站点简介</label>
@@ -113,11 +114,13 @@
               </div>
               <div>
                 <label class="block text-xs font-medium text-slate-500 mb-1">证书预警天数</label>
-                <input id="f-cert-warn" type="number" class="inp" min="1" max="365" value="30">
+                <input id="f-cert-warn" type="number" class="inp" min="1" max="365" value="30" placeholder="剩余多少天提醒">
+                <p class="mt-1 text-[10px] text-slate-400">证书剩余 N 天时开始预警</p>
               </div>
               <div>
                 <label class="block text-xs font-medium text-slate-500 mb-1">域名预警天数</label>
-                <input id="f-domain-warn" type="number" class="inp" min="7" max="365" value="90">
+                <input id="f-domain-warn" type="number" class="inp" min="7" max="365" value="90" placeholder="剩余多少天提醒">
+                <p class="mt-1 text-[10px] text-slate-400">域名到期前 N 天开始预警</p>
               </div>
             </div>
           </div>
@@ -132,7 +135,7 @@
     </div>
   </div>
 
-  <script src="/assets/js/common.js?v=2.2.0"></script>
+  <script src="/assets/js/common.js?v=2.4.0"></script>
   <script>
   (() => {
     const { api, esc, h, icon, toast, STATUS_META, fmtDelay, t, tStatus, skeleton } = WebStatus;
